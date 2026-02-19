@@ -1,0 +1,5 @@
+# Core Plugin: Quick Image Viewer
+
+A **Nuclr Commander** quick-view plugin that renders common image files directly in the quick viewer panel 
+using **Java ImageIO loading** (no external native dependencies required).
+
