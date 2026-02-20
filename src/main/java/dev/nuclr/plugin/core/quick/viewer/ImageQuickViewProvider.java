@@ -28,9 +28,9 @@ public class ImageQuickViewProvider implements QuickViewProvider {
 	}
 
 	@Override
-	public void open(QuickViewItem item) {
+	public boolean open(QuickViewItem item) {
 		getPanel(); // ensure panel exists
-		this.panel.load(item);
+		return this.panel.load(item);
 	}
 
 	@Override
@@ -44,6 +44,11 @@ public class ImageQuickViewProvider implements QuickViewProvider {
 	public void unload() {
 		close();
 		this.panel = null;
+	}
+
+	@Override
+	public int priority() {
+		return 1;
 	}
 
 }

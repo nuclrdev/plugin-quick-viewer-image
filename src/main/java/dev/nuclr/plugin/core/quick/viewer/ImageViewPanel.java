@@ -29,14 +29,16 @@ public class ImageViewPanel extends JPanel {
 					"bmp"
 					);
 
-	public void load(QuickViewItem item) {
+	public boolean load(QuickViewItem item) {
 		try (var in = item.openStream()) {
 			this.image = ImageIO.read(in);
 			repaint();
+			return true;
 		} catch (Exception e) {
 			log.error("Failed to read image: {}", item.name(), e);
 			this.image = null;
 			repaint();
+			return false;
 		}
 	}
 
