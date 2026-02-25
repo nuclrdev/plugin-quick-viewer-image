@@ -1,5 +1,7 @@
 package dev.nuclr.plugin.core.quick.viewer;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import javax.swing.JComponent;
 
 import dev.nuclr.plugin.QuickViewItem;
@@ -8,6 +10,7 @@ import dev.nuclr.plugin.QuickViewProvider;
 public class ImageQuickViewProvider implements QuickViewProvider {
 
 	private ImageViewPanel panel;
+	private volatile AtomicBoolean currentCancelled;
 
 	@Override
 	public String getPluginClass() {
@@ -28,13 +31,16 @@ public class ImageQuickViewProvider implements QuickViewProvider {
 	}
 
 	@Override
-	public boolean open(QuickViewItem item) {
+	public boolean open(QuickViewItem item, AtomicBoolean cancelled) {
+		if (currentCancelled != null) currentCancelled.set(true);
+		this.currentCancelled = cancelled;
 		getPanel(); // ensure panel exists
-		return this.panel.load(item);
+		return this.panel.load(item, cancelled);
 	}
 
 	@Override
 	public void close() {
+		if (currentCancelled != null) currentCancelled.set(true);
 		if (this.panel != null) {
 			this.panel.clear();
 		}

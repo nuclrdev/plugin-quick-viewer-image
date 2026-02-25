@@ -6,6 +6,7 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.imageio.ImageIO;
 import javax.swing.JPanel;
@@ -29,9 +30,11 @@ public class ImageViewPanel extends JPanel {
 					"bmp"
 					);
 
-	public boolean load(QuickViewItem item) {
+	public boolean load(QuickViewItem item, AtomicBoolean cancelled) {
 		try (var in = item.openStream()) {
-			this.image = ImageIO.read(in);
+			BufferedImage img = ImageIO.read(in);
+			if (cancelled.get()) return false;
+			this.image = img;
 			repaint();
 			return true;
 		} catch (Exception e) {
