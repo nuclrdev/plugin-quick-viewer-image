@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import javax.imageio.ImageIO;
 import javax.swing.JPanel;
 
+import dev.nuclr.plugin.PluginTheme;
 import dev.nuclr.plugin.QuickViewItem;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ImageViewPanel extends JPanel {
 
+	private Color backgroundColor = Color.BLACK;
 	private BufferedImage image;
 
 	static final Set<String> IMAGE_EXTENSIONS = Set
@@ -49,7 +51,7 @@ public class ImageViewPanel extends JPanel {
 	protected void paintComponent(Graphics g) {
 		super.paintComponent(g);
 
-		g.setColor(Color.black);
+		g.setColor(backgroundColor);
 		g.fillRect(0, 0, getWidth(), getHeight());
 
 		if (image == null) {
@@ -107,6 +109,16 @@ public class ImageViewPanel extends JPanel {
 
 	public void clear() {
 		this.image = null;
+		repaint();
+	}
+
+	public void applyTheme(PluginTheme theme) {
+		if (theme == null) {
+			return;
+		}
+
+		backgroundColor = theme.color("Panel.background", backgroundColor);
+		setBackground(backgroundColor);
 		repaint();
 	}
 }
