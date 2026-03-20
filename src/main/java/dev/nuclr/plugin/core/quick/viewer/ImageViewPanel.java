@@ -11,8 +11,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import javax.imageio.ImageIO;
 import javax.swing.JPanel;
 
+import dev.nuclr.plugin.PluginPathResource;
 import dev.nuclr.plugin.PluginTheme;
-import dev.nuclr.plugin.QuickViewItem;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
@@ -32,7 +32,7 @@ public class ImageViewPanel extends JPanel {
 					"bmp"
 					);
 
-	public boolean load(QuickViewItem item, AtomicBoolean cancelled) {
+	public boolean load(PluginPathResource item, AtomicBoolean cancelled) {
 		try (var in = item.openStream()) {
 			BufferedImage img = ImageIO.read(in);
 			if (cancelled.get()) return false;
@@ -40,7 +40,7 @@ public class ImageViewPanel extends JPanel {
 			repaint();
 			return true;
 		} catch (Exception e) {
-			log.error("Failed to read image: {}", item.name(), e);
+			log.error("Failed to read image: {}", item.getName(), e);
 			this.image = null;
 			repaint();
 			return false;
@@ -117,8 +117,6 @@ public class ImageViewPanel extends JPanel {
 			return;
 		}
 
-		backgroundColor = theme.color("Panel.background", backgroundColor);
-		setBackground(backgroundColor);
 		repaint();
 	}
 }
