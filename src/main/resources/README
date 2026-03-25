@@ -1,5 +1,9 @@
 # Core Plugin: Quick Image Viewer
 
-A **Nuclr Commander** quick-view plugin that renders common image files directly in the quick viewer panel 
-using **Java ImageIO loading** (no external native dependencies required).
+A **Nuclr Commander** quick-view plugin for fast previewing of **BMP**, **JPG**, and **PNG** files.
+
+It uses **Java ImageIO** for simple built-in image loading, so no external native image stack is required.
+
+For broader image format support, use the **ImageMagick Bridge** plugin:
+https://github.com/nuclrdev/plugin-imagemagick-bridge
 
