@@ -18,6 +18,7 @@ This plugin is intended for:
 - `*.bmp`
 - `*.jpg`
 - `*.png`
+- `*.gif`
 
 If you need broader image format support, use the **ImageMagick Bridge** plugin instead:
 
