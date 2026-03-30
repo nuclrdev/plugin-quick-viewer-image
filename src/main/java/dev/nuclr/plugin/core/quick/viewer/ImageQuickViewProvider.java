@@ -1,6 +1,7 @@
 package dev.nuclr.plugin.core.quick.viewer;
 
 import java.io.InputStream;
+import java.util.Map;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -13,23 +14,24 @@ import dev.nuclr.plugin.ApplicationPluginContext;
 import dev.nuclr.plugin.MenuResource;
 import dev.nuclr.plugin.PluginManifest;
 import dev.nuclr.plugin.PluginPathResource;
-import dev.nuclr.plugin.PluginTheme;
 import dev.nuclr.plugin.QuickViewProviderPlugin;
-import dev.nuclr.plugin.event.PluginEvent;
-import dev.nuclr.plugin.event.PluginThemeUpdatedEvent;
-import dev.nuclr.plugin.event.bus.PluginEventListener;
+import dev.nuclr.plugin.ResourceContentPlugin;
+import dev.nuclr.platform.events.NuclrEventListener;
+import dev.nuclr.platform.plugin.NuclrPluginContext;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class ImageQuickViewProvider implements QuickViewProviderPlugin, PluginEventListener {
+public class ImageQuickViewProvider implements QuickViewProviderPlugin, ResourceContentPlugin, NuclrEventListener {
 
-	private ApplicationPluginContext context;
+	private static final String THEME_UPDATED_EVENT_TYPE = "dev.nuclr.platform.theme.updated";
+
+	private NuclrPluginContext context;
 	private ImageViewPanel panel;
 	private volatile AtomicBoolean currentCancelled;
-	private PluginTheme theme;
+	private Map<String, Object> theme;
 
 	@Override
-	public PluginManifest getPluginInfo() {
+	public PluginManifest manifest() {
 		ObjectMapper objectMapper = context != null ? context.getObjectMapper() : new ObjectMapper();
 		try (InputStream is = getClass().getResourceAsStream("/plugin.json")) {
 			if (is != null) {
@@ -42,7 +44,7 @@ public class ImageQuickViewProvider implements QuickViewProviderPlugin, PluginEv
 	}
 
 	@Override
-	public JComponent getPanel() {
+	public JComponent panel() {
 		if (panel == null) {
 			panel = new ImageViewPanel();
 			panel.applyTheme(theme);
@@ -51,20 +53,30 @@ public class ImageQuickViewProvider implements QuickViewProviderPlugin, PluginEv
 	}
 
 	@Override
-	public List<MenuResource> getMenuItems(PluginPathResource source) {
+	public JComponent getPanel() {
+		return panel();
+	}
+
+	@Override
+	public List<MenuResource> menuItems(PluginPathResource source) {
 		return List.of();
 	}
 
 	@Override
-	public void load(ApplicationPluginContext context) {
+	public void load(NuclrPluginContext context) {
 		this.context = context;
 		context.getEventBus().subscribe(this);
 		applyTheme(resolveTheme(context));
 	}
 
 	@Override
+	public void load(ApplicationPluginContext context) {
+		load((NuclrPluginContext) context);
+	}
+
+	@Override
 	public void unload() {
-		closeItem();
+		closeResource();
 		if (context != null) {
 			context.getEventBus().unsubscribe(this);
 		}
@@ -81,22 +93,32 @@ public class ImageQuickViewProvider implements QuickViewProviderPlugin, PluginEv
 	}
 
 	@Override
-	public int getPriority() {
+	public int priority() {
 		return 1;
 	}
 
 	@Override
-	public boolean openItem(PluginPathResource resource, AtomicBoolean cancelled) {
+	public int getPriority() {
+		return priority();
+	}
+
+	@Override
+	public boolean openResource(PluginPathResource resource, AtomicBoolean cancelled) {
 		if (currentCancelled != null) {
 			currentCancelled.set(true);
 		}
 		currentCancelled = cancelled;
-		getPanel();
+		panel();
 		return panel.load(resource, cancelled);
 	}
 
 	@Override
-	public void closeItem() {
+	public boolean openItem(PluginPathResource resource, AtomicBoolean cancelled) {
+		return openResource(resource, cancelled);
+	}
+
+	@Override
+	public void closeResource() {
 		if (currentCancelled != null) {
 			currentCancelled.set(true);
 			currentCancelled = null;
@@ -106,7 +128,12 @@ public class ImageQuickViewProvider implements QuickViewProviderPlugin, PluginEv
 		}
 	}
 
-	public void applyTheme(PluginTheme theme) {
+	@Override
+	public void closeItem() {
+		closeResource();
+	}
+
+	public void applyTheme(Map<String, Object> theme) {
 		this.theme = theme;
 		if (panel != null) {
 			panel.applyTheme(theme);
@@ -114,35 +141,21 @@ public class ImageQuickViewProvider implements QuickViewProviderPlugin, PluginEv
 	}
 
 	@Override
-	public boolean isMessageSupported(PluginEvent msg) {
-		return msg instanceof PluginThemeUpdatedEvent;
+	public boolean isMessageSupported(String type) {
+		return THEME_UPDATED_EVENT_TYPE.equals(type);
 	}
 
 	@Override
-	public void handleMessage(PluginEvent e) {
-		if (e instanceof PluginThemeUpdatedEvent) {
+	public void handleMessage(String type, Map<String, Object> event) {
+		if (THEME_UPDATED_EVENT_TYPE.equals(type)) {
 			applyTheme(resolveTheme(context));
 		}
 	}
 
-	@Override
-	public void onFocusGained() {
-		// Quick view providers do not need focus-specific behavior.
-	}
-
-	@Override
-	public void onFocusLost() {
-		// Quick view providers do not need focus-specific behavior.
-	}
-
-	private static PluginTheme resolveTheme(ApplicationPluginContext context) {
+	private static Map<String, Object> resolveTheme(NuclrPluginContext context) {
 		if (context == null) {
 			return null;
 		}
-		Object theme = context.getGlobalData().get("pluginTheme");
-		if (theme instanceof PluginTheme pluginTheme) {
-			return pluginTheme;
-		}
-		return null;
+		return context.getTheme();
 	}
 }

@@ -5,6 +5,7 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -12,7 +13,6 @@ import javax.imageio.ImageIO;
 import javax.swing.JPanel;
 
 import dev.nuclr.plugin.PluginPathResource;
-import dev.nuclr.plugin.PluginTheme;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
@@ -112,7 +112,7 @@ public class ImageViewPanel extends JPanel {
 		repaint();
 	}
 
-	public void applyTheme(PluginTheme theme) {
+	public void applyTheme(Map<String, Object> theme) {
 		if (theme == null) {
 			return;
 		}
