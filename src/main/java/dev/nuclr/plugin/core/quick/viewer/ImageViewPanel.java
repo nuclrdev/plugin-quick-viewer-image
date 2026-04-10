@@ -12,7 +12,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import javax.imageio.ImageIO;
 import javax.swing.JPanel;
 
-import dev.nuclr.plugin.PluginPathResource;
+import dev.nuclr.platform.plugin.NuclrResourcePath;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
@@ -32,7 +32,7 @@ public class ImageViewPanel extends JPanel {
 					"bmp"
 					);
 
-	public boolean load(PluginPathResource item, AtomicBoolean cancelled) {
+	public boolean load(NuclrResourcePath item, AtomicBoolean cancelled) {
 		try (var in = item.openStream()) {
 			BufferedImage img = ImageIO.read(in);
 			if (cancelled.get()) return false;

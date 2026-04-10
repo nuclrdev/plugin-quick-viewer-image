@@ -1,27 +1,20 @@
 package dev.nuclr.plugin.core.quick.viewer;
 
-import java.io.InputStream;
-import java.util.Map;
-import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.swing.JComponent;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import dev.nuclr.plugin.ApplicationPluginContext;
-import dev.nuclr.plugin.MenuResource;
-import dev.nuclr.plugin.PluginManifest;
-import dev.nuclr.plugin.PluginPathResource;
-import dev.nuclr.plugin.QuickViewProviderPlugin;
-import dev.nuclr.plugin.ResourceContentPlugin;
+import dev.nuclr.platform.NuclrThemeScheme;
 import dev.nuclr.platform.events.NuclrEventListener;
+import dev.nuclr.platform.plugin.NuclrPlugin;
 import dev.nuclr.platform.plugin.NuclrPluginContext;
+import dev.nuclr.platform.plugin.NuclrResourcePath;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class ImageQuickViewProvider implements QuickViewProviderPlugin, ResourceContentPlugin, NuclrEventListener {
+public class ImageQuickViewProvider implements NuclrPlugin, NuclrEventListener {
 
 	private static final String THEME_UPDATED_EVENT_TYPE = "dev.nuclr.platform.theme.updated";
 
@@ -29,19 +22,6 @@ public class ImageQuickViewProvider implements QuickViewProviderPlugin, Resource
 	private ImageViewPanel panel;
 	private volatile AtomicBoolean currentCancelled;
 	private Map<String, Object> theme;
-
-	@Override
-	public PluginManifest manifest() {
-		ObjectMapper objectMapper = context != null ? context.getObjectMapper() : new ObjectMapper();
-		try (InputStream is = getClass().getResourceAsStream("/plugin.json")) {
-			if (is != null) {
-				return objectMapper.readValue(is, PluginManifest.class);
-			}
-		} catch (Exception e) {
-			log.error("Error reading /plugin.json for ImageQuickViewProvider", e);
-		}
-		return null;
-	}
 
 	@Override
 	public JComponent panel() {
@@ -53,25 +33,9 @@ public class ImageQuickViewProvider implements QuickViewProviderPlugin, Resource
 	}
 
 	@Override
-	public JComponent getPanel() {
-		return panel();
-	}
-
-	@Override
-	public List<MenuResource> menuItems(PluginPathResource source) {
-		return List.of();
-	}
-
-	@Override
 	public void load(NuclrPluginContext context) {
 		this.context = context;
 		context.getEventBus().subscribe(this);
-		applyTheme(resolveTheme(context));
-	}
-
-	@Override
-	public void load(ApplicationPluginContext context) {
-		load((NuclrPluginContext) context);
 	}
 
 	@Override
@@ -85,7 +49,7 @@ public class ImageQuickViewProvider implements QuickViewProviderPlugin, Resource
 	}
 
 	@Override
-	public boolean supports(PluginPathResource resource) {
+	public boolean supports(NuclrResourcePath resource) {
 		if (resource == null || resource.getExtension() == null) {
 			return false;
 		}
@@ -98,23 +62,13 @@ public class ImageQuickViewProvider implements QuickViewProviderPlugin, Resource
 	}
 
 	@Override
-	public int getPriority() {
-		return priority();
-	}
-
-	@Override
-	public boolean openResource(PluginPathResource resource, AtomicBoolean cancelled) {
+	public boolean openResource(NuclrResourcePath resource, AtomicBoolean cancelled) {
 		if (currentCancelled != null) {
 			currentCancelled.set(true);
 		}
 		currentCancelled = cancelled;
 		panel();
 		return panel.load(resource, cancelled);
-	}
-
-	@Override
-	public boolean openItem(PluginPathResource resource, AtomicBoolean cancelled) {
-		return openResource(resource, cancelled);
 	}
 
 	@Override
@@ -128,11 +82,6 @@ public class ImageQuickViewProvider implements QuickViewProviderPlugin, Resource
 		}
 	}
 
-	@Override
-	public void closeItem() {
-		closeResource();
-	}
-
 	public void applyTheme(Map<String, Object> theme) {
 		this.theme = theme;
 		if (panel != null) {
@@ -141,21 +90,82 @@ public class ImageQuickViewProvider implements QuickViewProviderPlugin, Resource
 	}
 
 	@Override
-	public boolean isMessageSupported(String type) {
-		return THEME_UPDATED_EVENT_TYPE.equals(type);
+	public String id() {
+		return "dev.nuclr.plugin.core.quick.viewer.image";
 	}
 
 	@Override
-	public void handleMessage(String type, Map<String, Object> event) {
-		if (THEME_UPDATED_EVENT_TYPE.equals(type)) {
-			applyTheme(resolveTheme(context));
-		}
+	public String name() {
+		return "Image Quick Viewer";
 	}
 
-	private static Map<String, Object> resolveTheme(NuclrPluginContext context) {
-		if (context == null) {
-			return null;
-		}
-		return context.getTheme();
+	@Override
+	public String version() {
+		return "1.0.0";
 	}
+
+	@Override
+	public String description() {
+		return "A quick viewer plugin for displaying images.";
+	}
+
+	@Override
+	public String author() {
+		return "Nuclr Team";
+	}
+
+	@Override
+	public String license() {
+		return "Apache-2.0";
+	}
+
+	@Override
+	public String website() {
+		return "https://nuclr.dev";
+	}
+
+	@Override
+	public String pageUrl() {
+		return "https://nuclr.dev/plugins/core/image-quick-viewer.html";
+	}
+
+	@Override
+	public String docUrl() {
+		return "https://nuclr.dev/plugins/core/image-quick-viewer.html";
+	}
+
+	@Override
+	public Developer type() {
+		return Developer.Official;
+	}
+
+	@Override
+	public void updateTheme(NuclrThemeScheme themeScheme) {
+		
+	}
+
+	@Override
+	public void handleMessage(String source, String type, Map<String, Object> event) {
+		
+	}
+
+	@Override
+	public boolean isMessageSupported(String type) {
+		return false;
+	}
+
+	@Override
+	public boolean onFocusGained() {
+		return false;
+	}
+
+	@Override
+	public void onFocusLost() {
+	}
+
+	@Override
+	public boolean isFocused() {
+		return false;
+	}
+	
 }
