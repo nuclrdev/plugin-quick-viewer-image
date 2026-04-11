@@ -14,7 +14,7 @@ import dev.nuclr.platform.plugin.NuclrResourcePath;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class ImageQuickViewProvider implements NuclrPlugin, NuclrEventListener {
+public class ImageQuickViewProvider implements NuclrPlugin {
 
 	private static final String THEME_UPDATED_EVENT_TYPE = "dev.nuclr.platform.theme.updated";
 
@@ -33,17 +33,13 @@ public class ImageQuickViewProvider implements NuclrPlugin, NuclrEventListener {
 	}
 
 	@Override
-	public void load(NuclrPluginContext context) {
+	public void load(NuclrPluginContext context, boolean template) {
 		this.context = context;
-		context.getEventBus().subscribe(this);
 	}
 
 	@Override
 	public void unload() {
 		closeResource();
-		if (context != null) {
-			context.getEventBus().unsubscribe(this);
-		}
 		panel = null;
 		context = null;
 	}
@@ -141,17 +137,7 @@ public class ImageQuickViewProvider implements NuclrPlugin, NuclrEventListener {
 
 	@Override
 	public void updateTheme(NuclrThemeScheme themeScheme) {
-		
-	}
 
-	@Override
-	public void handleMessage(String source, String type, Map<String, Object> event) {
-		
-	}
-
-	@Override
-	public boolean isMessageSupported(String type) {
-		return false;
 	}
 
 	@Override
@@ -167,5 +153,5 @@ public class ImageQuickViewProvider implements NuclrPlugin, NuclrEventListener {
 	public boolean isFocused() {
 		return false;
 	}
-	
+
 }
