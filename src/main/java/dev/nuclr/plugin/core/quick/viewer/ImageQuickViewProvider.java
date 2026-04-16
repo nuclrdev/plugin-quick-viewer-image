@@ -7,9 +7,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import javax.swing.JComponent;
 
 import dev.nuclr.platform.NuclrThemeScheme;
-import dev.nuclr.platform.events.NuclrEventListener;
 import dev.nuclr.platform.plugin.NuclrPlugin;
 import dev.nuclr.platform.plugin.NuclrPluginContext;
+import dev.nuclr.platform.plugin.NuclrPluginRole;
 import dev.nuclr.platform.plugin.NuclrResourcePath;
 import lombok.extern.slf4j.Slf4j;
 
@@ -22,6 +22,7 @@ public class ImageQuickViewProvider implements NuclrPlugin {
 	private ImageViewPanel panel;
 	private volatile AtomicBoolean currentCancelled;
 	private Map<String, Object> theme;
+	private NuclrResourcePath currentResource;
 
 	@Override
 	public JComponent panel() {
@@ -62,6 +63,7 @@ public class ImageQuickViewProvider implements NuclrPlugin {
 		if (currentCancelled != null) {
 			currentCancelled.set(true);
 		}
+		currentResource = resource;
 		currentCancelled = cancelled;
 		panel();
 		return panel.load(resource, cancelled);
@@ -152,6 +154,21 @@ public class ImageQuickViewProvider implements NuclrPlugin {
 	@Override
 	public boolean isFocused() {
 		return false;
+	}
+
+	@Override
+	public NuclrPluginRole role() {
+		return NuclrPluginRole.QuickViewer;
+	}
+
+	@Override
+	public NuclrResourcePath getCurrentResource() {
+		return currentResource;
+	}
+
+	@Override
+	public String uuid() {
+		return id();
 	}
 
 }
