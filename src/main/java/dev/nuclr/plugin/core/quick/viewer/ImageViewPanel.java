@@ -1,6 +1,8 @@
 package dev.nuclr.plugin.core.quick.viewer;
 
 import java.awt.Color;
+import java.awt.Font;
+import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
@@ -21,7 +23,11 @@ import lombok.extern.slf4j.Slf4j;
 public class ImageViewPanel extends JPanel {
 
 	private Color backgroundColor = Color.BLACK;
+	private Color messageColor = new Color(235, 235, 235);
+	private Color detailColor = new Color(170, 170, 170);
 	private BufferedImage image;
+	private String messageTitle;
+	private String messageDetail;
 
 	static final Set<String> IMAGE_EXTENSIONS = Set
 			.of(
@@ -36,13 +42,18 @@ public class ImageViewPanel extends JPanel {
 		try (var in = item.openStream()) {
 			BufferedImage img = ImageIO.read(in);
 			if (cancelled.get()) return false;
+			if (img == null) {
+				showMessage("Invalid image", "The selected file could not be decoded as an image.");
+				return false;
+			}
 			this.image = img;
+			this.messageTitle = null;
+			this.messageDetail = null;
 			repaint();
 			return true;
 		} catch (Exception e) {
 			log.error("Failed to read image: {}", item.getName(), e);
-			this.image = null;
-			repaint();
+			showMessage("Image preview unavailable", e.getMessage() != null ? e.getMessage() : "Failed to load image data.");
 			return false;
 		}
 	}
@@ -55,6 +66,7 @@ public class ImageViewPanel extends JPanel {
 		g.fillRect(0, 0, getWidth(), getHeight());
 
 		if (image == null) {
+			paintMessage((Graphics2D) g.create());
 			return;
 		}
 
@@ -107,16 +119,80 @@ public class ImageViewPanel extends JPanel {
 		}
 	}
 
-	public void clear() {
+	private void paintMessage(Graphics2D g2) {
+		try {
+			if (messageTitle == null || messageTitle.isBlank()) {
+				return;
+			}
+
+			g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+			Font baseFont = getFont() != null ? getFont() : new Font(Font.DIALOG, Font.PLAIN, 12);
+			Font titleFont = baseFont.deriveFont(Font.BOLD, Math.max(15f, baseFont.getSize2D() + 2f));
+			Font detailFont = baseFont.deriveFont(Font.PLAIN, Math.max(12f, baseFont.getSize2D()));
+
+			FontMetrics titleMetrics = g2.getFontMetrics(titleFont);
+			FontMetrics detailMetrics = g2.getFontMetrics(detailFont);
+
+			int centerX = getWidth() / 2;
+			int centerY = getHeight() / 2;
+			int spacing = 8;
+			int totalHeight = titleMetrics.getHeight();
+			if (messageDetail != null && !messageDetail.isBlank()) {
+				totalHeight += spacing + detailMetrics.getHeight();
+			}
+
+			int y = centerY - (totalHeight / 2) + titleMetrics.getAscent();
+
+			g2.setFont(titleFont);
+			g2.setColor(messageColor);
+			g2.drawString(messageTitle, centerX - (titleMetrics.stringWidth(messageTitle) / 2), y);
+
+			if (messageDetail != null && !messageDetail.isBlank()) {
+				y += spacing + detailMetrics.getAscent();
+				g2.setFont(detailFont);
+				g2.setColor(detailColor);
+				g2.drawString(messageDetail, centerX - (detailMetrics.stringWidth(messageDetail) / 2), y);
+			}
+		} finally {
+			g2.dispose();
+		}
+	}
+
+	private void showMessage(String title, String detail) {
 		this.image = null;
+		this.messageTitle = title;
+		this.messageDetail = detail;
 		repaint();
 	}
 
-	public void applyTheme(Map<String, Object> theme) {
+	public void clear() {
+		this.image = null;
+		this.messageTitle = null;
+		this.messageDetail = null;
+		repaint();
+	}
+
+	public void applyTheme(Map<String, ?> theme) {
 		if (theme == null) {
 			return;
 		}
 
+		backgroundColor = themeColor(theme, "Panel.background", backgroundColor);
+		messageColor = themeColor(theme, "Label.foreground", messageColor);
+		detailColor = themeColor(theme, "Component.linkColor", detailColor);
+
 		repaint();
+	}
+
+	private static Color themeColor(Map<String, ?> theme, String key, Color defaultColor) {
+		Object value = theme.get(key);
+		if (value instanceof String text) {
+			try {
+				return Color.decode(text);
+			} catch (NumberFormatException ignored) {
+			}
+		}
+		return defaultColor;
 	}
 }

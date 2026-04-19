@@ -139,7 +139,9 @@ public class ImageQuickViewProvider implements NuclrPlugin {
 
 	@Override
 	public void updateTheme(NuclrThemeScheme themeScheme) {
-
+		if (panel != null && themeScheme != null) {
+			panel.applyTheme(themeScheme.getUiDefaults());
+		}
 	}
 
 	@Override
