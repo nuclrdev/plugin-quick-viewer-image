@@ -1,18 +1,36 @@
 package dev.nuclr.plugin.core.quick.viewer;
 
+import java.awt.Desktop;
+import java.awt.Toolkit;
+import java.awt.datatransfer.Clipboard;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.StringSelection;
+import java.awt.datatransfer.Transferable;
+import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.event.ActionEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.Set;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.imageio.ImageIO;
+import javax.swing.AbstractAction;
+import javax.swing.JComponent;
+import javax.swing.JMenuItem;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 
 import dev.nuclr.platform.plugin.NuclrResourcePath;
 import lombok.Data;
@@ -26,8 +44,15 @@ public class ImageViewPanel extends JPanel {
 	private Color messageColor = new Color(235, 235, 235);
 	private Color detailColor = new Color(170, 170, 170);
 	private BufferedImage image;
+	private NuclrResourcePath currentResource;
 	private String messageTitle;
 	private String messageDetail;
+	private final JPopupMenu contextMenu = new JPopupMenu();
+	
+	private final JMenuItem copyImageItem = new JMenuItem(new CopyImageAction());
+	private final JMenuItem copyFileItem = new JMenuItem(new CopyFileAction());
+	private final JMenuItem openInExplorerItem = new JMenuItem(new OpenInExplorerAction());
+	private final JMenuItem copyPathItem = new JMenuItem(new CopyPathAction());
 
 	static final Set<String> IMAGE_EXTENSIONS = Set
 			.of(
@@ -38,6 +63,27 @@ public class ImageViewPanel extends JPanel {
 					"bmp"
 					);
 
+	public ImageViewPanel() {
+		setFocusable(true);
+		contextMenu.add(copyImageItem);
+		contextMenu.add(copyFileItem);
+		contextMenu.add(copyPathItem);
+		contextMenu.addSeparator();
+		contextMenu.add(openInExplorerItem);
+		addMouseListener(new MouseAdapter() {
+			@Override
+			public void mousePressed(MouseEvent e) {
+				showContextMenuIfTriggered(e);
+			}
+
+			@Override
+			public void mouseReleased(MouseEvent e) {
+				showContextMenuIfTriggered(e);
+			}
+		});
+		updateContextActions();
+	}
+
 	public boolean load(NuclrResourcePath item, AtomicBoolean cancelled) {
 		try (var in = item.openStream()) {
 			BufferedImage img = ImageIO.read(in);
@@ -46,9 +92,11 @@ public class ImageViewPanel extends JPanel {
 				showMessage("Invalid image", "The selected file could not be decoded as an image.");
 				return false;
 			}
+			this.currentResource = item;
 			this.image = img;
 			this.messageTitle = null;
 			this.messageDetail = null;
+			updateContextActions();
 			repaint();
 			return true;
 		} catch (Exception e) {
@@ -163,13 +211,16 @@ public class ImageViewPanel extends JPanel {
 		this.image = null;
 		this.messageTitle = title;
 		this.messageDetail = detail;
+		updateContextActions();
 		repaint();
 	}
 
 	public void clear() {
 		this.image = null;
+		this.currentResource = null;
 		this.messageTitle = null;
 		this.messageDetail = null;
+		updateContextActions();
 		repaint();
 	}
 
@@ -194,5 +245,158 @@ public class ImageViewPanel extends JPanel {
 			}
 		}
 		return defaultColor;
+	}
+
+	private void showContextMenuIfTriggered(MouseEvent event) {
+		if (!event.isPopupTrigger()) {
+			return;
+		}
+		updateContextActions();
+		contextMenu.show(event.getComponent(), event.getX(), event.getY());
+	}
+
+	private void updateContextActions() {
+		boolean hasImage = image != null;
+		boolean hasPath = currentPath() != null;
+		copyImageItem.setEnabled(hasImage);
+		copyFileItem.setEnabled(hasPath);
+		openInExplorerItem.setEnabled(hasPath);
+		copyPathItem.setEnabled(hasPath);
+	}
+
+	private Path currentPath() {
+		return currentResource != null ? currentResource.getPath() : null;
+	}
+
+	private void copyToClipboard(Transferable transferable) {
+		Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+		clipboard.setContents(transferable, null);
+	}
+
+	private final class CopyImageAction extends AbstractAction {
+		private static final long serialVersionUID = 1L;
+
+		private CopyImageAction() {
+			super("Copy image");
+		}
+
+		@Override
+		public void actionPerformed(ActionEvent e) {
+			if (image == null) {
+				return;
+			}
+			copyToClipboard(new TransferableImage(image));
+		}
+	}
+
+	private final class OpenInExplorerAction extends AbstractAction {
+		private static final long serialVersionUID = 1L;
+
+		private OpenInExplorerAction() {
+			super("Open in Explorer");
+		}
+
+		@Override
+		public void actionPerformed(ActionEvent e) {
+			Path path = currentPath();
+			if (path == null) {
+				return;
+			}
+			try {
+				if (Desktop.isDesktopSupported()) {
+					File file = path.toFile();
+					Desktop.getDesktop().open(file.getParentFile() != null ? file.getParentFile() : file);
+				}
+			} catch (IOException ex) {
+				log.warn("Failed to open Explorer for {}", path, ex);
+			}
+		}
+	}
+
+	private final class CopyFileAction extends AbstractAction {
+		private static final long serialVersionUID = 1L;
+
+		private CopyFileAction() {
+			super("Copy file");
+		}
+
+		@Override
+		public void actionPerformed(ActionEvent e) {
+			Path path = currentPath();
+			if (path == null) {
+				return;
+			}
+			copyToClipboard(new TransferableFile(path.toFile()));
+		}
+	}
+
+	private final class CopyPathAction extends AbstractAction {
+		private static final long serialVersionUID = 1L;
+
+		private CopyPathAction() {
+			super("Copy path");
+		}
+
+		@Override
+		public void actionPerformed(ActionEvent e) {
+			Path path = currentPath();
+			if (path == null) {
+				return;
+			}
+			copyToClipboard(new StringSelection(path.toString()));
+		}
+	}
+
+	private static final class TransferableImage implements Transferable {
+		private final BufferedImage image;
+
+		private TransferableImage(BufferedImage image) {
+			this.image = image;
+		}
+
+		@Override
+		public java.awt.datatransfer.DataFlavor[] getTransferDataFlavors() {
+			return new java.awt.datatransfer.DataFlavor[] { java.awt.datatransfer.DataFlavor.imageFlavor };
+		}
+
+		@Override
+		public boolean isDataFlavorSupported(java.awt.datatransfer.DataFlavor flavor) {
+			return java.awt.datatransfer.DataFlavor.imageFlavor.equals(flavor);
+		}
+
+		@Override
+		public Object getTransferData(java.awt.datatransfer.DataFlavor flavor)
+				throws UnsupportedFlavorException {
+			if (!isDataFlavorSupported(flavor)) {
+				throw new UnsupportedFlavorException(flavor);
+			}
+			return image;
+		}
+	}
+
+	private static final class TransferableFile implements Transferable {
+		private final List<File> files;
+
+		private TransferableFile(File file) {
+			this.files = List.of(file);
+		}
+
+		@Override
+		public DataFlavor[] getTransferDataFlavors() {
+			return new DataFlavor[] { DataFlavor.javaFileListFlavor };
+		}
+
+		@Override
+		public boolean isDataFlavorSupported(DataFlavor flavor) {
+			return DataFlavor.javaFileListFlavor.equals(flavor);
+		}
+
+		@Override
+		public Object getTransferData(DataFlavor flavor) throws UnsupportedFlavorException {
+			if (!isDataFlavorSupported(flavor)) {
+				throw new UnsupportedFlavorException(flavor);
+			}
+			return files;
+		}
 	}
 }
