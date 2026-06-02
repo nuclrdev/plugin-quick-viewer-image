@@ -32,7 +32,7 @@ import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 
-import dev.nuclr.platform.plugin.NuclrResourcePath;
+import dev.nuclr.platform.plugin.NuclrResource;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
@@ -44,7 +44,7 @@ public class ImageViewPanel extends JPanel {
 	private Color messageColor = new Color(235, 235, 235);
 	private Color detailColor = new Color(170, 170, 170);
 	private BufferedImage image;
-	private NuclrResourcePath currentResource;
+	private NuclrResource currentResource;
 	private String messageTitle;
 	private String messageDetail;
 	private final JPopupMenu contextMenu = new JPopupMenu();
@@ -84,8 +84,8 @@ public class ImageViewPanel extends JPanel {
 		updateContextActions();
 	}
 
-	public boolean load(NuclrResourcePath item, AtomicBoolean cancelled) {
-		try (var in = item.openStream()) {
+	public boolean load(NuclrResource item, AtomicBoolean cancelled) {
+		try (var in = item.openInputStream()) {
 			BufferedImage img = ImageIO.read(in);
 			if (cancelled.get()) return false;
 			if (img == null) {
