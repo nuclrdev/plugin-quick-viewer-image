@@ -85,8 +85,20 @@ public class ImageViewPanel extends JPanel {
 	}
 
 	public boolean load(NuclrResource item, AtomicBoolean cancelled) {
+		
+		BufferedImage img = null;
+
 		try (var in = item.openInputStream()) {
-			BufferedImage img = ImageIO.read(in);
+		
+			img = ImageIO.read(in);
+			
+		} catch (Exception e) {
+			log.error("Failed to read image: {}", item.getName(), e);
+			showMessage("Image preview unavailable", e.getMessage() != null ? e.getMessage() : "Failed to load image data.");
+			return false;
+		}
+		
+		try {
 			if (cancelled.get()) return false;
 			if (img == null) {
 				showMessage("Invalid image", "The selected file could not be decoded as an image.");
@@ -100,7 +112,6 @@ public class ImageViewPanel extends JPanel {
 			repaint();
 			return true;
 		} catch (Exception e) {
-			log.error("Failed to read image: {}", item.getName(), e);
 			showMessage("Image preview unavailable", e.getMessage() != null ? e.getMessage() : "Failed to load image data.");
 			return false;
 		}
