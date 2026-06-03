@@ -13,9 +13,12 @@ import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.Cursor;
+import java.awt.Point;
 import java.awt.event.ActionEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.event.MouseWheelEvent;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -47,6 +50,17 @@ public class ImageViewPanel extends JPanel {
 	private NuclrResource currentResource;
 	private String messageTitle;
 	private String messageDetail;
+
+	private static final double MIN_ZOOM = 1.0;
+	private static final double MAX_ZOOM = 16.0;
+	private static final double ZOOM_STEP = 1.15;
+
+	/** Zoom multiplier applied on top of the fit-to-panel scale. 1.0 == fit. */
+	private double zoom = 1.0;
+	/** Pan offset (in panel pixels) relative to the centered position. */
+	private double offsetX = 0.0;
+	private double offsetY = 0.0;
+	private Point lastDragPoint;
 	private final JPopupMenu contextMenu = new JPopupMenu();
 	
 	private final JMenuItem copyImageItem = new JMenuItem(new CopyImageAction());
@@ -74,13 +88,32 @@ public class ImageViewPanel extends JPanel {
 			@Override
 			public void mousePressed(MouseEvent e) {
 				showContextMenuIfTriggered(e);
+				if (javax.swing.SwingUtilities.isLeftMouseButton(e) && isZoomed()) {
+					lastDragPoint = e.getPoint();
+				}
 			}
 
 			@Override
 			public void mouseReleased(MouseEvent e) {
 				showContextMenuIfTriggered(e);
+				lastDragPoint = null;
+				updateCursor();
 			}
 		});
+		addMouseMotionListener(new MouseAdapter() {
+			@Override
+			public void mouseDragged(MouseEvent e) {
+				if (lastDragPoint == null) {
+					return;
+				}
+				offsetX += e.getX() - lastDragPoint.x;
+				offsetY += e.getY() - lastDragPoint.y;
+				lastDragPoint = e.getPoint();
+				clampOffsets();
+				repaint();
+			}
+		});
+		addMouseWheelListener(this::handleMouseWheel);
 		updateContextActions();
 	}
 
@@ -108,6 +141,7 @@ public class ImageViewPanel extends JPanel {
 			this.image = img;
 			this.messageTitle = null;
 			this.messageDetail = null;
+			resetZoom();
 			updateContextActions();
 			repaint();
 			return true;
@@ -143,21 +177,15 @@ public class ImageViewPanel extends JPanel {
 			return;
 		}
 
-		// Fit inside panel (contain) while preserving aspect ratio
-		final double fitScale = Math
-				.min(
-						(double) panelW / imgW,
-						(double) panelH / imgH);
-
-		// Never upscale
-		final double scale = Math.min(1.0, fitScale);
+		// Fit-to-panel scale (never upscaling), then apply the user zoom on top.
+		final double scale = baseScale() * zoom;
 
 		final int drawW = (int) Math.round(imgW * scale);
 		final int drawH = (int) Math.round(imgH * scale);
 
-		// Center
-		final int x = (panelW - drawW) / 2;
-		final int y = (panelH - drawH) / 2;
+		// Center, then apply the pan offset.
+		final int x = (panelW - drawW) / 2 + (int) Math.round(offsetX);
+		final int y = (panelH - drawH) / 2 + (int) Math.round(offsetY);
 
 		Graphics2D g2 = (Graphics2D) g.create();
 		try {
@@ -176,6 +204,133 @@ public class ImageViewPanel extends JPanel {
 		} finally {
 			g2.dispose();
 		}
+
+		paintZoomIndicator((Graphics2D) g.create(), scale);
+	}
+
+	/** Draws the current on-screen scale (relative to the image's actual pixels) in the corner. */
+	private void paintZoomIndicator(Graphics2D g2, double scale) {
+		try {
+			String text = Math.round(scale * 100) + "%";
+
+			g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+			g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+			Font baseFont = getFont() != null ? getFont() : new Font(Font.DIALOG, Font.PLAIN, 12);
+			Font font = baseFont.deriveFont(Font.PLAIN, Math.max(11f, baseFont.getSize2D()));
+			g2.setFont(font);
+			FontMetrics fm = g2.getFontMetrics();
+
+			int padX = 8;
+			int padY = 4;
+			int textW = fm.stringWidth(text);
+			int textH = fm.getAscent() + fm.getDescent();
+			int boxW = textW + padX * 2;
+			int boxH = textH + padY * 2;
+			int margin = 10;
+			int boxX = getWidth() - boxW - margin;
+			int boxY = getHeight() - boxH - margin;
+
+			g2.setColor(new Color(0, 0, 0, 140));
+			g2.fillRoundRect(boxX, boxY, boxW, boxH, 8, 8);
+
+			g2.setColor(messageColor);
+			g2.drawString(text, boxX + padX, boxY + padY + fm.getAscent());
+		} finally {
+			g2.dispose();
+		}
+	}
+
+	/** Fit-to-panel scale (contain), capped so images are never upscaled at zoom 1.0. */
+	private double baseScale() {
+		if (image == null) {
+			return 1.0;
+		}
+		int panelW = getWidth();
+		int panelH = getHeight();
+		int imgW = image.getWidth();
+		int imgH = image.getHeight();
+		if (panelW <= 0 || panelH <= 0 || imgW <= 0 || imgH <= 0) {
+			return 1.0;
+		}
+		double fitScale = Math.min((double) panelW / imgW, (double) panelH / imgH);
+		return Math.min(1.0, fitScale);
+	}
+
+	private void handleMouseWheel(MouseWheelEvent e) {
+		// Only zoom while Ctrl is held; otherwise ignore (leave normal scrolling to the parent).
+		if (image == null || !e.isControlDown()) {
+			return;
+		}
+
+		double oldZoom = zoom;
+		double base = baseScale();
+		// Wheel up (negative rotation) zooms in, wheel down zooms out.
+		double factor = Math.pow(ZOOM_STEP, -e.getPreciseWheelRotation());
+		double newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, oldZoom * factor));
+
+		// Snap to actual size (100%) when the on-screen scale lands near it, for easy 1:1 viewing.
+		double snappedScale = base * newZoom;
+		if (snappedScale >= 0.95 && snappedScale <= 1.05) {
+			newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, 1.0 / base));
+		}
+
+		if (newZoom == oldZoom) {
+			return;
+		}
+
+		// Keep the image point under the cursor anchored while zooming.
+		double oldScale = base * oldZoom;
+		double newScale = base * newZoom;
+		int imgW = image.getWidth();
+		int imgH = image.getHeight();
+
+		double oldImgX = (getWidth() - imgW * oldScale) / 2.0 + offsetX;
+		double oldImgY = (getHeight() - imgH * oldScale) / 2.0 + offsetY;
+		double pixelX = (e.getX() - oldImgX) / oldScale;
+		double pixelY = (e.getY() - oldImgY) / oldScale;
+
+		zoom = newZoom;
+		offsetX = e.getX() - pixelX * newScale - (getWidth() - imgW * newScale) / 2.0;
+		offsetY = e.getY() - pixelY * newScale - (getHeight() - imgH * newScale) / 2.0;
+
+		clampOffsets();
+		updateCursor();
+		repaint();
+	}
+
+	private boolean isZoomed() {
+		return image != null && zoom > MIN_ZOOM;
+	}
+
+	private void resetZoom() {
+		zoom = 1.0;
+		offsetX = 0.0;
+		offsetY = 0.0;
+		lastDragPoint = null;
+		updateCursor();
+	}
+
+	/** Constrain the pan offset so the zoomed image can't be dragged off-screen. */
+	private void clampOffsets() {
+		if (image == null) {
+			offsetX = 0.0;
+			offsetY = 0.0;
+			return;
+		}
+		double scale = baseScale() * zoom;
+		double drawW = image.getWidth() * scale;
+		double drawH = image.getHeight() * scale;
+
+		double maxX = Math.max(0.0, (drawW - getWidth()) / 2.0);
+		double maxY = Math.max(0.0, (drawH - getHeight()) / 2.0);
+
+		offsetX = Math.max(-maxX, Math.min(maxX, offsetX));
+		offsetY = Math.max(-maxY, Math.min(maxY, offsetY));
+	}
+
+	private void updateCursor() {
+		setCursor(Cursor.getPredefinedCursor(isZoomed() ? Cursor.MOVE_CURSOR : Cursor.DEFAULT_CURSOR));
 	}
 
 	private void paintMessage(Graphics2D g2) {
@@ -231,6 +386,7 @@ public class ImageViewPanel extends JPanel {
 		this.currentResource = null;
 		this.messageTitle = null;
 		this.messageDetail = null;
+		resetZoom();
 		updateContextActions();
 		repaint();
 	}
