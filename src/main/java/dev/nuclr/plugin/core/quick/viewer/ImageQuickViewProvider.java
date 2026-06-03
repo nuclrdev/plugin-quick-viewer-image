@@ -1,10 +1,13 @@
 package dev.nuclr.plugin.core.quick.viewer;
 
+import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.swing.JComponent;
+
+import org.apache.commons.io.FilenameUtils;
 
 import dev.nuclr.platform.NuclrThemeScheme;
 import dev.nuclr.platform.plugin.NuclrPluginContext;
@@ -45,24 +48,17 @@ public class ImageQuickViewProvider implements QuickViewNuclrPlugin {
 	}
 
 	@Override
-	public boolean supports(NuclrResource resource) {
-		String extension = extension(resource);
+	public boolean supports(Path path) {
+		String extension = extension(path);
 		if (extension == null) {
 			return false;
 		}
 		return ImageViewPanel.IMAGE_EXTENSIONS.contains(extension.toLowerCase(Locale.ROOT));
 	}
 
-	private static String extension(NuclrResource resource) {
-		if (resource == null || resource.getName() == null) {
-			return null;
-		}
-		String name = resource.getName();
-		int dot = name.lastIndexOf('.');
-		if (dot < 0 || dot == name.length() - 1) {
-			return null;
-		}
-		return name.substring(dot + 1);
+	private static String extension(Path path) {
+		var name = path.getFileName() != null ? path.getFileName().toString() : path.toString();
+		return FilenameUtils.getExtension(name);
 	}
 
 	@Override
