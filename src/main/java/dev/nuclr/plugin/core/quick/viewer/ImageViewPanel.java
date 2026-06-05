@@ -121,8 +121,10 @@ public class ImageViewPanel extends JPanel {
 		
 		BufferedImage img = null;
 
-		try (var in = item.openInputStream()) {
-		
+		try (var rawIn = item.openInputStream()) {
+			
+			var in = new CancelableInputStream(rawIn, cancelled);
+				
 			img = ImageIO.read(in);
 			
 		} catch (Exception e) {
