@@ -48,7 +48,8 @@ public class ImageQuickViewProvider implements QuickViewNuclrPlugin {
 	}
 
 	@Override
-	public boolean supports(Path path) {
+	public boolean supports(NuclrResource resource) {
+		var path = resource.getPath();
 		String extension = extension(path);
 		if (extension == null) {
 			return false;
