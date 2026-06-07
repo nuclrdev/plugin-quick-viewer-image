@@ -51,6 +51,11 @@ public class ImageQuickViewProvider implements QuickViewNuclrPlugin {
 	public boolean supports(NuclrResource resource) {
 		var path = resource.getPath();
 		String extension = extension(path);
+		
+		if (extension == null || extension.isEmpty()) {
+			extension = extension(resource);
+		}
+		
 		if (extension == null) {
 			return false;
 		}
@@ -61,6 +66,20 @@ public class ImageQuickViewProvider implements QuickViewNuclrPlugin {
 		var name = path.getFileName() != null ? path.getFileName().toString() : path.toString();
 		return FilenameUtils.getExtension(name);
 	}
+	
+
+	private static String extension(NuclrResource resource) {
+		if (resource == null || resource.getName() == null) {
+			return null;
+		}
+		String name = resource.getName();
+		int dot = name.lastIndexOf('.');
+		if (dot < 0 || dot == name.length() - 1) {
+			return null;
+		}
+		return name.substring(dot + 1);
+	}
+
 
 	@Override
 	public int priority() {
