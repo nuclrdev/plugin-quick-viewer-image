@@ -206,9 +206,9 @@
 								<script><![CDATA[
 import java.security.*
 
-def storepass = project.properties['jarsigner.storepass']
-def keystorePath = project.properties['jarsigner.keystorepath']
-def keyAlias = project.properties['jarsigner.keyalias']
+def storepass = System.getProperty('jarsigner.storepass') ?: project.properties['jarsigner.storepass']
+def keystorePath = System.getProperty('jarsigner.keystorepath') ?: project.properties['jarsigner.keystorepath']
+def keyAlias = System.getProperty('jarsigner.keyalias') ?: project.properties['jarsigner.keyalias']
 def ks = KeyStore.getInstance("PKCS12")
 new FileInputStream(keystorePath).withStream {
 	ks.load(it, storepass.toCharArray())
