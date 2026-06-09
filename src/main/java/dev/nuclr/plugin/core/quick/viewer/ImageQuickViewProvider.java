@@ -1,8 +1,10 @@
 package dev.nuclr.plugin.core.quick.viewer;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.swing.JComponent;
@@ -18,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ImageQuickViewProvider implements QuickViewNuclrPlugin {
 
+	private static final String VERSION = loadVersion();
 	private static final String THEME_UPDATED_EVENT_TYPE = "dev.nuclr.platform.theme.updated";
 
 	private NuclrPluginContext context;
@@ -120,7 +123,19 @@ public class ImageQuickViewProvider implements QuickViewNuclrPlugin {
 
 	@Override
 	public String version() {
-		return "1.0.0";
+		return VERSION;
+	}
+
+	private static String loadVersion() {
+		var props = new Properties();
+		try (var stream = ImageQuickViewProvider.class.getResourceAsStream("/plugin.properties")) {
+			if (stream != null) {
+				props.load(stream);
+			}
+		} catch (IOException e) {
+			log.warn("Could not load plugin.properties", e);
+		}
+		return props.getProperty("version", "unknown");
 	}
 
 	@Override
