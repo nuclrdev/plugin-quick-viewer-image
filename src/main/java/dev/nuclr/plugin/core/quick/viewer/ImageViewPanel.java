@@ -8,11 +8,15 @@ import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
 import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.Color;
+import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.GraphicsConfiguration;
+import java.awt.GraphicsEnvironment;
 import java.awt.RenderingHints;
+import java.awt.Transparency;
 import java.awt.Cursor;
 import java.awt.Point;
 import java.awt.event.ActionEvent;
@@ -20,15 +24,22 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
 import java.awt.image.BufferedImage;
+import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.imageio.ImageIO;
+import javax.imageio.ImageReadParam;
+import javax.imageio.ImageReader;
+import javax.imageio.stream.FileImageInputStream;
+import javax.imageio.stream.ImageInputStream;
 import javax.swing.AbstractAction;
 import javax.swing.JComponent;
 import javax.swing.JMenuItem;
@@ -43,6 +54,19 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ImageViewPanel extends JPanel {
 
+	static {
+		// Decode straight from memory instead of spilling a temp cache file to disk.
+		ImageIO.setUseCache(false);
+	}
+
+	/**
+	 * Upper bound on the decoded image's largest dimension. Images bigger than this are
+	 * decoded with integer subsampling, so a 50-megapixel photo never pays the full decode
+	 * cost just to be shown in a preview pane. The cap is generous (≈2× the screen) so normal
+	 * images decode at full resolution and only enormous ones are trimmed.
+	 */
+	private static final int MAX_DECODE_DIMENSION = computeMaxDecodeDimension();
+
 	private Color backgroundColor = Color.BLACK;
 	private Color messageColor = new Color(235, 235, 235);
 	private Color detailColor = new Color(170, 170, 170);
@@ -50,6 +74,18 @@ public class ImageViewPanel extends JPanel {
 	private NuclrResource currentResource;
 	private String messageTitle;
 	private String messageDetail;
+
+	/**
+	 * Pre-scaled, display-sized copy of {@link #image} for the fit view (zoom == 1). Built once
+	 * (off the EDT during load, or lazily on first paint) so repaints are plain hardware blits
+	 * instead of re-scaling millions of source pixels every frame. Published via volatile so the
+	 * background loader and the EDT painter never see a half-updated cache.
+	 */
+	private volatile ScaledImage scaledCache;
+
+	/** Immutable snapshot tying a pre-scaled bitmap to the exact source and target size it was built for. */
+	private record ScaledImage(BufferedImage source, int width, int height, BufferedImage bitmap) {
+	}
 
 	private static final double MIN_ZOOM = 1.0;
 	private static final double MAX_ZOOM = 16.0;
@@ -118,39 +154,109 @@ public class ImageViewPanel extends JPanel {
 	}
 
 	public boolean load(NuclrResource item, AtomicBoolean cancelled) {
-		
-		BufferedImage img = null;
 
-		try (var rawIn = item.openInputStream()) {
-			
-			var in = new CancelableInputStream(rawIn, cancelled);
-				
-			img = ImageIO.read(in);
-			
+		BufferedImage img;
+
+		try {
+			img = decode(item, cancelled);
 		} catch (Exception e) {
+			if (cancelled != null && cancelled.get()) {
+				return false;
+			}
 			log.error("Failed to read image: {}", item.getName(), e);
 			showMessage("Image preview unavailable", e.getMessage() != null ? e.getMessage() : "Failed to load image data.");
 			return false;
 		}
-		
+
 		try {
-			if (cancelled.get()) return false;
+			if (cancelled != null && cancelled.get()) return false;
 			if (img == null) {
 				showMessage("Invalid image", "The selected file could not be decoded as an image.");
 				return false;
 			}
 			this.currentResource = item;
 			this.image = img;
+			this.scaledCache = null;
 			this.messageTitle = null;
 			this.messageDetail = null;
 			resetZoom();
 			updateContextActions();
+			// Build the fit-view bitmap now, while we are still off the EDT, so the very first
+			// paint is an instant blit rather than a full-resolution rescale.
+			prebuildScaledCache();
 			repaint();
 			return true;
 		} catch (Exception e) {
 			showMessage("Image preview unavailable", e.getMessage() != null ? e.getMessage() : "Failed to load image data.");
 			return false;
 		}
+	}
+
+	/**
+	 * Decode {@code item} into a {@link BufferedImage}. Local files are read directly through an
+	 * {@link ImageReader} (faster than wrapping a generic stream) and large images are subsampled
+	 * during decode. Remote resources, or formats whose reader can't seek a file, fall back to a
+	 * buffered, cancelable stream decode.
+	 */
+	private BufferedImage decode(NuclrResource item, AtomicBoolean cancelled) throws Exception {
+		
+		Path path = item.getPath();
+		
+		if (path != null && Files.isReadable(path)) {
+			try {
+				BufferedImage img = decodeFromFile(item, cancelled);
+				if (img != null) {
+					return img;
+				}
+			} catch (Exception e) {
+				if (cancelled != null && cancelled.get()) {
+					return null;
+				}
+				log.debug("Fast file decode failed for {}, falling back to stream", item.getName(), e);
+			}
+		}
+
+		try (var rawIn = item.openInputStream()) {
+			var in = new BufferedInputStream(new CancelableInputStream(rawIn, cancelled), 1 << 16);
+			return ImageIO.read(in);
+		}
+	}
+
+	private BufferedImage decodeFromFile(NuclrResource item, AtomicBoolean cancelled) throws IOException {
+		
+		try (var iis = item.openInputStream()) {
+			
+			Iterator<ImageReader> readers = ImageIO.getImageReaders(iis);
+			if (!readers.hasNext()) {
+				return null;
+			}
+			ImageReader reader = readers.next();
+			try {
+				reader.setInput(iis, true, true);
+				int index = reader.getMinIndex();
+				int w = reader.getWidth(index);
+				int h = reader.getHeight(index);
+
+				ImageReadParam param = reader.getDefaultReadParam();
+				int subsampling = subsamplingFor(w, h);
+				if (subsampling > 1) {
+					param.setSourceSubsampling(subsampling, subsampling, 0, 0);
+				}
+
+				if (cancelled != null && cancelled.get()) {
+					return null;
+				}
+				return reader.read(index, param);
+			} finally {
+				reader.dispose();
+			}
+		} catch (Exception e) {
+			if (cancelled != null && cancelled.get()) {
+				return null;
+			}
+		}
+		
+		return null;
 	}
 
 	@Override
@@ -191,18 +297,24 @@ public class ImageViewPanel extends JPanel {
 
 		Graphics2D g2 = (Graphics2D) g.create();
 		try {
+			// Fit view (zoom == 1): blit a pre-scaled, display-sized bitmap 1:1 — no per-frame rescale.
+			BufferedImage prescaled = (zoom == 1.0) ? getOrBuildScaled(drawW, drawH) : null;
 
-			g2
-					.setRenderingHint(
-							RenderingHints.KEY_INTERPOLATION,
-							scale < 1.0
-									? RenderingHints.VALUE_INTERPOLATION_BILINEAR
-									: RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+			if (prescaled != null && prescaled.getWidth() == drawW && prescaled.getHeight() == drawH) {
+				g2.drawImage(prescaled, x, y, null);
+			} else {
+				g2
+						.setRenderingHint(
+								RenderingHints.KEY_INTERPOLATION,
+								scale < 1.0
+										? RenderingHints.VALUE_INTERPOLATION_BILINEAR
+										: RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
 
-			g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-			g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+				g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+				g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-			g2.drawImage(image, x, y, drawW, drawH, null);
+				g2.drawImage(image, x, y, drawW, drawH, null);
+			}
 		} finally {
 			g2.dispose();
 		}
@@ -377,6 +489,7 @@ public class ImageViewPanel extends JPanel {
 
 	private void showMessage(String title, String detail) {
 		this.image = null;
+		this.scaledCache = null;
 		this.messageTitle = title;
 		this.messageDetail = detail;
 		updateContextActions();
@@ -385,12 +498,135 @@ public class ImageViewPanel extends JPanel {
 
 	public void clear() {
 		this.image = null;
+		this.scaledCache = null;
 		this.currentResource = null;
 		this.messageTitle = null;
 		this.messageDetail = null;
 		resetZoom();
 		updateContextActions();
 		repaint();
+	}
+
+	// -------------------------------------------------------------------------
+	// Scaled-image cache & GPU-friendly bitmap helpers
+	// -------------------------------------------------------------------------
+
+	/** Pre-build the fit-view bitmap for the current panel size, ignoring any failure. */
+	private void prebuildScaledCache() {
+		try {
+			BufferedImage img = image;
+			if (img == null) {
+				return;
+			}
+			double scale = baseScale();
+			int drawW = (int) Math.round(img.getWidth() * scale);
+			int drawH = (int) Math.round(img.getHeight() * scale);
+			if (drawW > 0 && drawH > 0) {
+				getOrBuildScaled(drawW, drawH);
+			}
+		} catch (Exception e) {
+			log.debug("Could not pre-build scaled image", e);
+		}
+	}
+
+	/**
+	 * Return a bitmap sized exactly {@code w}×{@code h} for the current {@link #image}, reusing the
+	 * cached one when possible. When no downscaling is needed (panel ≥ image) the source image is
+	 * returned directly so small images cost nothing.
+	 */
+	private BufferedImage getOrBuildScaled(int w, int h) {
+		BufferedImage src = image;
+		if (src == null || w <= 0 || h <= 0) {
+			return null;
+		}
+
+		if (w >= src.getWidth() && h >= src.getHeight()) {
+			return src;
+		}
+
+		ScaledImage cached = scaledCache;
+		if (cached != null && cached.source() == src && cached.width() == w && cached.height() == h) {
+			return cached.bitmap();
+		}
+
+		BufferedImage scaled = createScaled(src, w, h);
+		scaledCache = new ScaledImage(src, w, h, scaled);
+		return scaled;
+	}
+
+	/** High-quality downscale using progressive halving into GPU-compatible bitmaps. */
+	private BufferedImage createScaled(BufferedImage src, int targetW, int targetH) {
+		int w = src.getWidth();
+		int h = src.getHeight();
+		BufferedImage current = src;
+
+		// Halve repeatedly until within 2× of the target — far better quality than a single
+		// large bilinear step, and still cheap because each pass shrinks the working set.
+		while (w > targetW * 2 || h > targetH * 2) {
+			w = Math.max(targetW, w / 2);
+			h = Math.max(targetH, h / 2);
+			current = renderResized(current, w, h);
+		}
+
+		return renderResized(current, targetW, targetH);
+	}
+
+	private BufferedImage renderResized(BufferedImage src, int w, int h) {
+		BufferedImage dst = newCompatibleImage(w, h, src.getColorModel().hasAlpha());
+		Graphics2D g = dst.createGraphics();
+		try {
+			g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+			g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+			g.drawImage(src, 0, 0, w, h, null);
+		} finally {
+			g.dispose();
+		}
+		return dst;
+	}
+
+	private static BufferedImage newCompatibleImage(int w, int h, boolean hasAlpha) {
+		int transparency = hasAlpha ? Transparency.TRANSLUCENT : Transparency.OPAQUE;
+		GraphicsConfiguration gc = defaultConfiguration();
+		if (gc != null) {
+			return gc.createCompatibleImage(w, h, transparency);
+		}
+		return new BufferedImage(w, h, hasAlpha ? BufferedImage.TYPE_INT_ARGB : BufferedImage.TYPE_INT_RGB);
+	}
+
+	private static GraphicsConfiguration defaultConfiguration() {
+		try {
+			if (GraphicsEnvironment.isHeadless()) {
+				return null;
+			}
+			return GraphicsEnvironment.getLocalGraphicsEnvironment()
+					.getDefaultScreenDevice()
+					.getDefaultConfiguration();
+		} catch (Exception e) {
+			return null;
+		}
+	}
+
+	private static int subsamplingFor(int w, int h) {
+		int max = Math.max(w, h);
+		if (max <= MAX_DECODE_DIMENSION) {
+			return 1;
+		}
+		return (int) Math.ceil((double) max / MAX_DECODE_DIMENSION);
+	}
+
+	private static int computeMaxDecodeDimension() {
+		try {
+			if (!GraphicsEnvironment.isHeadless()) {
+				Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+				int max = Math.max(screen.width, screen.height);
+				if (max > 0) {
+					return Math.max(2048, max * 2);
+				}
+			}
+		} catch (Exception ignored) {
+			// fall through to default
+		}
+		return 4096;
 	}
 
 	public void applyTheme(Map<String, ?> theme) {
