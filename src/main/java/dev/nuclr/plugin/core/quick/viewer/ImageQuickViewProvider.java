@@ -3,7 +3,6 @@ package dev.nuclr.plugin.core.quick.viewer;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -26,14 +25,14 @@ public class ImageQuickViewProvider implements QuickViewNuclrPlugin {
 	private NuclrPluginContext context;
 	private ImageViewPanel panel;
 	private volatile AtomicBoolean currentCancelled;
-	private Map<String, Object> theme;
+	private NuclrThemeScheme themeScheme;
 	private NuclrResource currentResource;
 
 	@Override
 	public JComponent panel() {
 		if (panel == null) {
 			panel = new ImageViewPanel();
-			panel.applyTheme(theme);
+			panel.applyTheme(themeScheme != null ? themeScheme : context != null ? context.getTheme() : null);
 		}
 		return panel;
 	}
@@ -41,6 +40,7 @@ public class ImageQuickViewProvider implements QuickViewNuclrPlugin {
 	@Override
 	public void preinit(NuclrPluginContext context) {
 		this.context = context;
+		this.themeScheme = context != null ? context.getTheme() : null;
 	}
 
 	@Override
@@ -170,8 +170,9 @@ public class ImageQuickViewProvider implements QuickViewNuclrPlugin {
 
 	@Override
 	public void updateTheme(NuclrThemeScheme themeScheme) {
-		if (panel != null && themeScheme != null) {
-			panel.applyTheme(themeScheme.getUiDefaults());
+		this.themeScheme = themeScheme;
+		if (panel != null) {
+			panel.applyTheme(themeScheme);
 		}
 	}
 

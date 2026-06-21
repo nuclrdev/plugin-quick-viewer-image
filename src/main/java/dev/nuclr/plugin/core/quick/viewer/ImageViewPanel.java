@@ -45,7 +45,9 @@ import javax.swing.JComponent;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
+import javax.swing.UIManager;
 
+import dev.nuclr.platform.NuclrThemeScheme;
 import dev.nuclr.platform.plugin.NuclrResource;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
@@ -114,6 +116,7 @@ public class ImageViewPanel extends JPanel {
 					);
 
 	public ImageViewPanel() {
+		refreshCommanderFont(null);
 		setFocusable(true);
 		contextMenu.add(copyImageItem);
 		contextMenu.add(copyFileItem);
@@ -330,7 +333,7 @@ public class ImageViewPanel extends JPanel {
 			g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 			g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-			Font baseFont = getFont() != null ? getFont() : new Font(Font.DIALOG, Font.PLAIN, 12);
+			Font baseFont = commanderFont();
 			Font font = baseFont.deriveFont(Font.PLAIN, Math.max(11f, baseFont.getSize2D()));
 			g2.setFont(font);
 			FontMetrics fm = g2.getFontMetrics();
@@ -455,7 +458,7 @@ public class ImageViewPanel extends JPanel {
 
 			g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 
-			Font baseFont = getFont() != null ? getFont() : new Font(Font.DIALOG, Font.PLAIN, 12);
+			Font baseFont = commanderFont();
 			Font titleFont = baseFont.deriveFont(Font.BOLD, Math.max(15f, baseFont.getSize2D() + 2f));
 			Font detailFont = baseFont.deriveFont(Font.PLAIN, Math.max(12f, baseFont.getSize2D()));
 
@@ -629,16 +632,44 @@ public class ImageViewPanel extends JPanel {
 		return 4096;
 	}
 
-	public void applyTheme(Map<String, ?> theme) {
-		if (theme == null) {
+	public void applyTheme(NuclrThemeScheme themeScheme) {
+		refreshCommanderFont(themeScheme);
+
+		if (themeScheme == null) {
+			repaint();
 			return;
 		}
 
+		Map<String, ?> theme = themeScheme.getUiDefaults();
 		backgroundColor = themeColor(theme, "Panel.background", backgroundColor);
 		messageColor = themeColor(theme, "Label.foreground", messageColor);
 		detailColor = themeColor(theme, "Component.linkColor", detailColor);
 
 		repaint();
+	}
+
+	private void refreshCommanderFont(NuclrThemeScheme themeScheme) {
+		Font font = themeScheme != null ? themeScheme.defaultFont() : commanderFont();
+		if (font == null) {
+			font = commanderFont();
+		}
+		setFont(font);
+		contextMenu.setFont(font);
+		copyImageItem.setFont(font);
+		copyFileItem.setFont(font);
+		copyPathItem.setFont(font);
+		openInExplorerItem.setFont(font);
+	}
+
+	private Font commanderFont() {
+		Font font = UIManager.getFont("defaultFont");
+		if (font == null) {
+			font = UIManager.getFont("Label.font");
+		}
+		if (font == null) {
+			font = getFont();
+		}
+		return font != null ? font : new Font(Font.DIALOG, Font.PLAIN, 12);
 	}
 
 	private static Color themeColor(Map<String, ?> theme, String key, Color defaultColor) {

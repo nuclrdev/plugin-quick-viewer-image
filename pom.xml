@@ -8,7 +8,7 @@
 
 	<artifactId>quick-view-image</artifactId>
 
-	<version>1.0.3</version>
+	<version>1.0.4</version>
 
 	<name>Nuclr Quick View - Image</name>
 
@@ -23,7 +23,7 @@
 		<dependency>
 			<groupId>dev.nuclr</groupId>
 			<artifactId>platform-sdk</artifactId>
-			<version>3.0.1</version>
+			<version>3.0.2</version>
 			<scope>provided</scope>
 		</dependency>
 		<!-- Source: https://mvnrepository.com/artifact/org.projectlombok/lombok -->
