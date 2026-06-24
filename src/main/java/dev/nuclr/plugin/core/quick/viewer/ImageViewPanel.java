@@ -635,15 +635,14 @@ public class ImageViewPanel extends JPanel {
 	public void applyTheme(NuclrThemeScheme themeScheme) {
 		refreshCommanderFont(themeScheme);
 
-		if (themeScheme == null) {
-			repaint();
-			return;
-		}
-
-		Map<String, ?> theme = themeScheme.getUiDefaults();
-		backgroundColor = themeColor(theme, "Panel.background", backgroundColor);
-		messageColor = themeColor(theme, "Label.foreground", messageColor);
-		detailColor = themeColor(theme, "Component.linkColor", detailColor);
+		// The theme scheme's uiDefaults map only holds the keys a theme explicitly overrides, so it
+		// can't be relied on for the active palette. The commander bakes the fully-resolved theme
+		// (base LAF + overrides) into the global UIManager before broadcasting the update, so resolve
+		// colors from there — with any explicit scheme override taking precedence.
+		Map<String, String> overrides = themeScheme != null ? themeScheme.getUiDefaults() : Map.of();
+		backgroundColor = resolveThemeColor(overrides, "Panel.background", backgroundColor);
+		messageColor = resolveThemeColor(overrides, "Label.foreground", messageColor);
+		detailColor = resolveThemeColor(overrides, "Label.disabledForeground", detailColor);
 
 		repaint();
 	}
@@ -672,13 +671,23 @@ public class ImageViewPanel extends JPanel {
 		return font != null ? font : new Font(Font.DIALOG, Font.PLAIN, 12);
 	}
 
-	private static Color themeColor(Map<String, ?> theme, String key, Color defaultColor) {
-		Object value = theme.get(key);
-		if (value instanceof String text) {
+	/**
+	 * Resolve a theme color for {@code key}, preferring an explicit scheme override, then the live
+	 * {@link UIManager} value (which reflects the full active theme), and finally {@code defaultColor}.
+	 * The {@code UIManager} value is copied into a plain {@link Color} so we don't retain a
+	 * {@code UIResource} that a later L&amp;F swap could mutate.
+	 */
+	private static Color resolveThemeColor(Map<String, String> overrides, String key, Color defaultColor) {
+		String override = overrides.get(key);
+		if (override != null) {
 			try {
-				return Color.decode(text);
+				return Color.decode(override);
 			} catch (NumberFormatException ignored) {
 			}
+		}
+		Color uiColor = UIManager.getColor(key);
+		if (uiColor != null) {
+			return new Color(uiColor.getRGB(), true);
 		}
 		return defaultColor;
 	}
