@@ -20,6 +20,7 @@ import java.awt.Transparency;
 import java.awt.Cursor;
 import java.awt.Point;
 import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
@@ -45,6 +46,7 @@ import javax.swing.JComponent;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
+import javax.swing.KeyStroke;
 import javax.swing.UIManager;
 
 import dev.nuclr.platform.NuclrThemeScheme;
@@ -101,6 +103,10 @@ public class ImageViewPanel extends JPanel {
 	private Point lastDragPoint;
 	private final JPopupMenu contextMenu = new JPopupMenu();
 	
+	private final RotateAction rotateLeftAction = new RotateAction("Rotate left (L)", false);
+	private final RotateAction rotateRightAction = new RotateAction("Rotate right (R)", true);
+	private final JMenuItem rotateLeftItem = new JMenuItem(rotateLeftAction);
+	private final JMenuItem rotateRightItem = new JMenuItem(rotateRightAction);
 	private final JMenuItem copyImageItem = new JMenuItem(new CopyImageAction());
 	private final JMenuItem copyFileItem = new JMenuItem(new CopyFileAction());
 	private final JMenuItem openInExplorerItem = new JMenuItem(new OpenInExplorerAction());
@@ -118,6 +124,9 @@ public class ImageViewPanel extends JPanel {
 	public ImageViewPanel() {
 		refreshCommanderFont(null);
 		setFocusable(true);
+		contextMenu.add(rotateLeftItem);
+		contextMenu.add(rotateRightItem);
+		contextMenu.addSeparator();
 		contextMenu.add(copyImageItem);
 		contextMenu.add(copyFileItem);
 		contextMenu.add(copyPathItem);
@@ -126,6 +135,8 @@ public class ImageViewPanel extends JPanel {
 		addMouseListener(new MouseAdapter() {
 			@Override
 			public void mousePressed(MouseEvent e) {
+				// Take keyboard focus so the L/R rotate keys work after clicking the preview.
+				requestFocusInWindow();
 				showContextMenuIfTriggered(e);
 				if (javax.swing.SwingUtilities.isLeftMouseButton(e) && isZoomed()) {
 					lastDragPoint = e.getPoint();
@@ -153,6 +164,14 @@ public class ImageViewPanel extends JPanel {
 			}
 		});
 		addMouseWheelListener(this::handleMouseWheel);
+
+		// L / R rotate the image 90° counter-clockwise / clockwise. Bound WHEN_FOCUSED so they only
+		// fire while the preview itself holds focus, never hijacking keys from the file panel.
+		getInputMap(WHEN_FOCUSED).put(KeyStroke.getKeyStroke(KeyEvent.VK_R, 0), "rotateRight");
+		getInputMap(WHEN_FOCUSED).put(KeyStroke.getKeyStroke(KeyEvent.VK_L, 0), "rotateLeft");
+		getActionMap().put("rotateRight", rotateRightAction);
+		getActionMap().put("rotateLeft", rotateLeftAction);
+
 		updateContextActions();
 	}
 
@@ -511,6 +530,47 @@ public class ImageViewPanel extends JPanel {
 	}
 
 	// -------------------------------------------------------------------------
+	// Rotation
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Rotate the current image 90° in place ({@code clockwise} for R, counter-clockwise for L).
+	 * The backing bitmap is replaced so the existing fit-scale, cache and clamp logic all keep
+	 * working against the new (swapped) dimensions; zoom and pan reset back to the fit view.
+	 */
+	private void rotate(boolean clockwise) {
+		if (image == null) {
+			return;
+		}
+		image = rotate90(image, clockwise);
+		scaledCache = null;
+		resetZoom();
+		prebuildScaledCache();
+		repaint();
+	}
+
+	/** Produce a new bitmap that is {@code src} rotated 90° (clockwise or counter-clockwise). */
+	private static BufferedImage rotate90(BufferedImage src, boolean clockwise) {
+		int w = src.getWidth();
+		int h = src.getHeight();
+		BufferedImage dst = newCompatibleImage(h, w, src.getColorModel().hasAlpha());
+		Graphics2D g = dst.createGraphics();
+		try {
+			if (clockwise) {
+				g.translate(h, 0);
+				g.rotate(Math.PI / 2);
+			} else {
+				g.translate(0, w);
+				g.rotate(-Math.PI / 2);
+			}
+			g.drawImage(src, 0, 0, null);
+		} finally {
+			g.dispose();
+		}
+		return dst;
+	}
+
+	// -------------------------------------------------------------------------
 	// Scaled-image cache & GPU-friendly bitmap helpers
 	// -------------------------------------------------------------------------
 
@@ -654,6 +714,8 @@ public class ImageViewPanel extends JPanel {
 		}
 		setFont(font);
 		contextMenu.setFont(font);
+		rotateLeftItem.setFont(font);
+		rotateRightItem.setFont(font);
 		copyImageItem.setFont(font);
 		copyFileItem.setFont(font);
 		copyPathItem.setFont(font);
@@ -703,6 +765,8 @@ public class ImageViewPanel extends JPanel {
 	private void updateContextActions() {
 		boolean hasImage = image != null;
 		boolean hasPath = currentPath() != null;
+		rotateLeftItem.setEnabled(hasImage);
+		rotateRightItem.setEnabled(hasImage);
 		copyImageItem.setEnabled(hasImage);
 		copyFileItem.setEnabled(hasPath);
 		openInExplorerItem.setEnabled(hasPath);
@@ -716,6 +780,22 @@ public class ImageViewPanel extends JPanel {
 	private void copyToClipboard(Transferable transferable) {
 		Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
 		clipboard.setContents(transferable, null);
+	}
+
+	private final class RotateAction extends AbstractAction {
+		private static final long serialVersionUID = 1L;
+
+		private final boolean clockwise;
+
+		private RotateAction(String name, boolean clockwise) {
+			super(name);
+			this.clockwise = clockwise;
+		}
+
+		@Override
+		public void actionPerformed(ActionEvent e) {
+			rotate(clockwise);
+		}
 	}
 
 	private final class CopyImageAction extends AbstractAction {
