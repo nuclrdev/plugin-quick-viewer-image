@@ -42,6 +42,8 @@ import javax.imageio.ImageReader;
 import javax.imageio.stream.FileImageInputStream;
 import javax.imageio.stream.ImageInputStream;
 import javax.swing.AbstractAction;
+import javax.swing.JCheckBox;
+import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JComponent;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
@@ -102,7 +104,7 @@ public class ImageViewPanel extends JPanel {
 	private double offsetY = 0.0;
 	private Point lastDragPoint;
 	private final JPopupMenu contextMenu = new JPopupMenu();
-	
+
 	private final RotateAction rotateLeftAction = new RotateAction("Rotate left (L)", false);
 	private final RotateAction rotateRightAction = new RotateAction("Rotate right (R)", true);
 	private final JMenuItem rotateLeftItem = new JMenuItem(rotateLeftAction);
@@ -111,6 +113,16 @@ public class ImageViewPanel extends JPanel {
 	private final JMenuItem copyFileItem = new JMenuItem(new CopyFileAction());
 	private final JMenuItem openInExplorerItem = new JMenuItem(new OpenInExplorerAction());
 	private final JMenuItem copyPathItem = new JMenuItem(new CopyPathAction());
+
+	/** Visible toggle (bottom-left) plus a mirroring context-menu item for showing the info overlay. */
+	private final JCheckBox infoCheckBox = new JCheckBox("ⓘ Info");
+	private final JCheckBoxMenuItem infoMenuItem = new JCheckBoxMenuItem("Show image info");
+
+	/** Whether the semi-transparent metadata overlay is currently drawn on top of the image. */
+	private boolean showInfo = false;
+
+	/** Extracted {@code [label, value]} rows for the current image; published for the EDT painter. */
+	private volatile List<String[]> infoLines;
 
 	static final Set<String> IMAGE_EXTENSIONS = Set
 			.of(
@@ -124,12 +136,27 @@ public class ImageViewPanel extends JPanel {
 	public ImageViewPanel() {
 		refreshCommanderFont(null);
 		setFocusable(true);
+
+		// Custom-painted panel, so we position the info toggle by hand (bottom-left, clear of the
+		// bottom-right zoom indicator). Transparent so the image shows through behind the label.
+		setLayout(null);
+		infoCheckBox.setOpaque(false);
+		infoCheckBox.setFocusable(false);
+		infoCheckBox.setForeground(messageColor);
+		infoCheckBox.setVisible(false);
+		infoCheckBox.addActionListener(e -> setShowInfo(infoCheckBox.isSelected()));
+		add(infoCheckBox);
+
+		infoMenuItem.addActionListener(e -> setShowInfo(infoMenuItem.isSelected()));
+
 		contextMenu.add(rotateLeftItem);
 		contextMenu.add(rotateRightItem);
 		contextMenu.addSeparator();
 		contextMenu.add(copyImageItem);
 		contextMenu.add(copyFileItem);
 		contextMenu.add(copyPathItem);
+		contextMenu.addSeparator();
+		contextMenu.add(infoMenuItem);
 		contextMenu.addSeparator();
 		contextMenu.add(openInExplorerItem);
 		addMouseListener(new MouseAdapter() {
@@ -175,6 +202,23 @@ public class ImageViewPanel extends JPanel {
 		updateContextActions();
 	}
 
+	@Override
+	public void doLayout() {
+		super.doLayout();
+		// Keep the info toggle pinned to the bottom-left corner as the panel resizes.
+		Dimension pref = infoCheckBox.getPreferredSize();
+		int margin = 10;
+		infoCheckBox.setBounds(margin, getHeight() - pref.height - margin, pref.width, pref.height);
+	}
+
+	/** Toggle the metadata overlay, keeping the visible checkbox and the context-menu item in sync. */
+	private void setShowInfo(boolean show) {
+		this.showInfo = show;
+		infoCheckBox.setSelected(show);
+		infoMenuItem.setSelected(show);
+		repaint();
+	}
+
 	public boolean load(NuclrResource item, AtomicBoolean cancelled) {
 
 		BufferedImage img;
@@ -201,6 +245,8 @@ public class ImageViewPanel extends JPanel {
 			this.scaledCache = null;
 			this.messageTitle = null;
 			this.messageDetail = null;
+			// Extract metadata here (off the EDT) so the overlay paints instantly when toggled on.
+			this.infoLines = ImageInfo.extract(item, img);
 			resetZoom();
 			updateContextActions();
 			// Build the fit-view bitmap now, while we are still off the EDT, so the very first
@@ -342,6 +388,68 @@ public class ImageViewPanel extends JPanel {
 		}
 
 		paintZoomIndicator((Graphics2D) g.create(), scale);
+		paintInfoOverlay((Graphics2D) g.create());
+	}
+
+	/**
+	 * Draw the semi-transparent metadata panel in the top-left corner. Each row is a bold label in the
+	 * detail color followed by its value in the message color, all on a translucent rounded backdrop so
+	 * the text stays legible over any image.
+	 */
+	private void paintInfoOverlay(Graphics2D g2) {
+		try {
+			List<String[]> lines = infoLines;
+			if (!showInfo || image == null || lines == null || lines.isEmpty()) {
+				return;
+			}
+
+			g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+			g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+			Font baseFont = commanderFont();
+			Font labelFont = baseFont.deriveFont(Font.BOLD, Math.max(11f, baseFont.getSize2D()));
+			Font valueFont = baseFont.deriveFont(Font.PLAIN, Math.max(11f, baseFont.getSize2D()));
+			FontMetrics labelMetrics = g2.getFontMetrics(labelFont);
+			FontMetrics valueMetrics = g2.getFontMetrics(valueFont);
+
+			int lineH = Math.max(labelMetrics.getHeight(), valueMetrics.getHeight());
+			int colGap = 14;
+			int maxLabelW = 0;
+			int maxValueW = 0;
+			for (String[] row : lines) {
+				maxLabelW = Math.max(maxLabelW, labelMetrics.stringWidth(row[0]));
+				maxValueW = Math.max(maxValueW, valueMetrics.stringWidth(row[1]));
+			}
+
+			int padX = 14;
+			int padY = 12;
+			int margin = 10;
+			int boxW = Math.min(maxLabelW + colGap + maxValueW + padX * 2, getWidth() - margin * 2);
+			int boxH = lines.size() * lineH + padY * 2;
+			int boxX = margin;
+			int boxY = margin;
+
+			g2.setColor(new Color(0, 0, 0, 180));
+			g2.fillRoundRect(boxX, boxY, boxW, boxH, 12, 12);
+			g2.setColor(new Color(255, 255, 255, 40));
+			g2.drawRoundRect(boxX, boxY, boxW, boxH, 12, 12);
+
+			int labelX = boxX + padX;
+			int valueX = labelX + maxLabelW + colGap;
+			int y = boxY + padY;
+			for (String[] row : lines) {
+				int baseline = y + labelMetrics.getAscent();
+				g2.setFont(labelFont);
+				g2.setColor(detailColor);
+				g2.drawString(row[0], labelX, baseline);
+				g2.setFont(valueFont);
+				g2.setColor(messageColor);
+				g2.drawString(row[1], valueX, baseline);
+				y += lineH;
+			}
+		} finally {
+			g2.dispose();
+		}
 	}
 
 	/** Draws the current on-screen scale (relative to the image's actual pixels) in the corner. */
@@ -512,6 +620,7 @@ public class ImageViewPanel extends JPanel {
 	private void showMessage(String title, String detail) {
 		this.image = null;
 		this.scaledCache = null;
+		this.infoLines = null;
 		this.messageTitle = title;
 		this.messageDetail = detail;
 		updateContextActions();
@@ -521,6 +630,7 @@ public class ImageViewPanel extends JPanel {
 	public void clear() {
 		this.image = null;
 		this.scaledCache = null;
+		this.infoLines = null;
 		this.currentResource = null;
 		this.messageTitle = null;
 		this.messageDetail = null;
@@ -704,6 +814,8 @@ public class ImageViewPanel extends JPanel {
 		messageColor = resolveThemeColor(overrides, "Label.foreground", messageColor);
 		detailColor = resolveThemeColor(overrides, "Label.disabledForeground", detailColor);
 
+		infoCheckBox.setForeground(messageColor);
+
 		repaint();
 	}
 
@@ -720,6 +832,8 @@ public class ImageViewPanel extends JPanel {
 		copyFileItem.setFont(font);
 		copyPathItem.setFont(font);
 		openInExplorerItem.setFont(font);
+		infoMenuItem.setFont(font);
+		infoCheckBox.setFont(font);
 	}
 
 	private Font commanderFont() {
@@ -765,12 +879,15 @@ public class ImageViewPanel extends JPanel {
 	private void updateContextActions() {
 		boolean hasImage = image != null;
 		boolean hasPath = currentPath() != null;
+		boolean hasInfo = hasImage && infoLines != null && !infoLines.isEmpty();
 		rotateLeftItem.setEnabled(hasImage);
 		rotateRightItem.setEnabled(hasImage);
 		copyImageItem.setEnabled(hasImage);
 		copyFileItem.setEnabled(hasPath);
 		openInExplorerItem.setEnabled(hasPath);
 		copyPathItem.setEnabled(hasPath);
+		infoMenuItem.setEnabled(hasInfo);
+		infoCheckBox.setVisible(hasInfo);
 	}
 
 	private Path currentPath() {

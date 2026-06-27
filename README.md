@@ -16,7 +16,8 @@ A lightweight [Nuclr Commander](https://nuclr.dev) plugin for instant image prev
 | 📐 Fit-to-panel | Images are scaled to fill the panel while preserving aspect ratio; no upscaling |
 | 🔍 Zoom | Ctrl+scroll to zoom in and out (1× to 16×); zoom indicator shown in corner |
 | 🖱️ Pan | Drag with the left mouse button when zoomed to pan around the image |
-| 📋 Context menu | Right-click to copy image, copy file, copy path, or open in Explorer |
+| ℹ️ Image info overlay | Toggle a semi-transparent panel showing dimensions, file size, and EXIF (camera, exposure, ISO, GPS…) |
+| 📋 Context menu | Right-click to copy image, copy file, copy path, toggle image info, or open in Explorer |
 | ⛔ Cancellable load | Switching files immediately cancels the in-flight load; no stale images |
 | ⚠️ Error messages | Clear on-panel messages for unreadable or corrupt files |
 
@@ -30,6 +31,10 @@ A lightweight [Nuclr Commander](https://nuclr.dev) plugin for instant image prev
 | Open any new file | Reset zoom and pan |
 
 > 💡 Snaps to 100% (actual pixels) when the on-screen scale passes through 1:1 for easy sharpness checking.
+
+### ℹ️ Image info overlay
+
+Tick the **ⓘ Info** checkbox in the bottom-left corner (or right-click → **Show image info**) to overlay a semi-transparent panel with the image's metadata: dimensions, file size, format, and — when present — EXIF details such as camera make/model, lens, capture date, exposure, aperture, ISO, focal length, orientation, and GPS coordinates. Metadata is read with the [Metadata Extractor](https://github.com/drewnoakes/metadata-extractor) library.
 
 ## 🧩 Supported formats
 
@@ -62,17 +67,19 @@ Images are read via `ImageIO.read` wrapped in a `CancelableInputStream` that mon
 ```text
 src/main/java/dev/nuclr/plugin/core/quick/viewer/
 ├── ImageQuickViewProvider.java   plugin entry point
-├── ImageViewPanel.java           Swing panel, rendering, zoom/pan logic
+├── ImageViewPanel.java           Swing panel, rendering, zoom/pan logic, info overlay
+├── ImageInfo.java                EXIF / metadata extraction for the info overlay
 └── CancelableInputStream.java    cancellation-aware image loading
 ```
 
 ## 📚 Dependencies
 
-All dependencies are provided by Nuclr Commander at runtime — nothing extra is bundled in the plugin ZIP.
+Most dependencies are provided by Nuclr Commander at runtime; the metadata library (and its `xmpcore` transitive dependency) is bundled in the plugin ZIP for the info overlay.
 
 | Library | Version | Purpose |
 |---|---|---|
-| `dev.nuclr:platform-sdk` | `3.0.1` | Nuclr platform interfaces |
+| `dev.nuclr:platform-sdk` | `3.0.2` | Nuclr platform interfaces |
+| `com.drewnoakes:metadata-extractor` | `2.20.0` | EXIF / image metadata extraction (bundled) |
 
 ## 📜 License
 
