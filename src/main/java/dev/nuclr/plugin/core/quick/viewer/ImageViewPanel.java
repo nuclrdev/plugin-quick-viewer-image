@@ -76,6 +76,9 @@ public class ImageViewPanel extends JPanel {
 	private Color backgroundColor = Color.BLACK;
 	private Color messageColor = new Color(235, 235, 235);
 	private Color detailColor = new Color(170, 170, 170);
+	/** Translucent backdrop and hairline border for the info/zoom overlays, derived from the theme. */
+	private Color overlayBackground = new Color(0, 0, 0, 180);
+	private Color overlayBorder = new Color(255, 255, 255, 40);
 	private BufferedImage image;
 	private NuclrResource currentResource;
 	private String messageTitle;
@@ -429,9 +432,9 @@ public class ImageViewPanel extends JPanel {
 			int boxX = margin;
 			int boxY = margin;
 
-			g2.setColor(new Color(0, 0, 0, 180));
+			g2.setColor(overlayBackground);
 			g2.fillRoundRect(boxX, boxY, boxW, boxH, 12, 12);
-			g2.setColor(new Color(255, 255, 255, 40));
+			g2.setColor(overlayBorder);
 			g2.drawRoundRect(boxX, boxY, boxW, boxH, 12, 12);
 
 			int labelX = boxX + padX;
@@ -475,7 +478,7 @@ public class ImageViewPanel extends JPanel {
 			int boxX = getWidth() - boxW - margin;
 			int boxY = getHeight() - boxH - margin;
 
-			g2.setColor(new Color(0, 0, 0, 140));
+			g2.setColor(overlayBackground);
 			g2.fillRoundRect(boxX, boxY, boxW, boxH, 8, 8);
 
 			g2.setColor(messageColor);
@@ -814,6 +817,11 @@ public class ImageViewPanel extends JPanel {
 		messageColor = resolveThemeColor(overrides, "Label.foreground", messageColor);
 		detailColor = resolveThemeColor(overrides, "Label.disabledForeground", detailColor);
 
+		// The overlays float over the image, so tint them from the theme: a translucent panel-colored
+		// backdrop (dark box on dark themes, light box on light ones) with a faint foreground-colored edge.
+		overlayBackground = withAlpha(backgroundColor, 180);
+		overlayBorder = withAlpha(messageColor, 40);
+
 		infoCheckBox.setForeground(messageColor);
 
 		repaint();
@@ -853,6 +861,11 @@ public class ImageViewPanel extends JPanel {
 	 * The {@code UIManager} value is copied into a plain {@link Color} so we don't retain a
 	 * {@code UIResource} that a later L&amp;F swap could mutate.
 	 */
+	/** Return {@code base} with its alpha channel replaced by {@code alpha} (0–255). */
+	private static Color withAlpha(Color base, int alpha) {
+		return new Color(base.getRed(), base.getGreen(), base.getBlue(), alpha);
+	}
+
 	private static Color resolveThemeColor(Map<String, String> overrides, String key, Color defaultColor) {
 		String override = overrides.get(key);
 		if (override != null) {
