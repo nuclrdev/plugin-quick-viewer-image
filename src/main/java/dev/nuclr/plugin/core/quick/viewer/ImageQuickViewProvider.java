@@ -66,6 +66,9 @@ public class ImageQuickViewProvider implements QuickViewNuclrPlugin {
 	}
 
 	private static String extension(Path path) {
+		if (path == null) {
+			return null; // path-less (virtual) resources are matched by name via extension(NuclrResource)
+		}
 		var name = path.getFileName() != null ? path.getFileName().toString() : path.toString();
 		return FilenameUtils.getExtension(name);
 	}
