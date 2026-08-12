@@ -16,6 +16,8 @@ A lightweight [Nuclr Commander](https://nuclr.dev) plugin for instant image prev
 | 📐 Fit-to-panel | Images are scaled to fill the panel while preserving aspect ratio; no upscaling |
 | 🔍 Zoom | Ctrl+scroll to zoom in and out (1× to 16×); zoom indicator shown in corner |
 | 🖱️ Pan | Drag with the left mouse button when zoomed to pan around the image |
+| 🔄 Rotate | `R` / `L` (or the context menu) rotate the preview 90° clockwise / counter-clockwise |
+| 🏎️ Subsampled decode | Images far larger than the screen are decoded with integer subsampling, so a 50-megapixel photo doesn't pay a full-resolution decode just to be previewed |
 | ℹ️ Image info overlay | Toggle a semi-transparent panel showing dimensions, file size, and EXIF (camera, exposure, ISO, GPS…) |
 | 📋 Context menu | Right-click to copy image, copy file, copy path, toggle image info, or open in Explorer |
 | ⛔ Cancellable load | Switching files immediately cancels the in-flight load; no stale images |
@@ -28,7 +30,11 @@ A lightweight [Nuclr Commander](https://nuclr.dev) plugin for instant image prev
 | `Ctrl` + scroll wheel up | Zoom in |
 | `Ctrl` + scroll wheel down | Zoom out |
 | Left mouse drag | Pan (only when zoomed in) |
+| `R` | Rotate 90° clockwise |
+| `L` | Rotate 90° counter-clockwise |
 | Open any new file | Reset zoom and pan |
+
+> 💡 Click the preview first — the rotate keys are bound `WHEN_FOCUSED`.
 
 > 💡 Snaps to 100% (actual pixels) when the on-screen scale passes through 1:1 for easy sharpness checking.
 
@@ -60,7 +66,7 @@ Nuclr Commander verifies the RSA-SHA256 signature against `nuclr-cert.pem` on lo
 
 ## ⚙️ How it works
 
-Images are read via `ImageIO.read` wrapped in a `CancelableInputStream` that monitors the cancellation flag so switching files during a slow load aborts immediately. The fit-to-panel scale is computed as `min(panelW/imgW, panelH/imgH)` capped at 1.0 to avoid upscaling. The user zoom multiplier is applied on top; at 16× the cursor switches to a move cursor to indicate panning is available.
+Images are read via `ImageIO` wrapped in a `CancelableInputStream` that monitors the cancellation flag so switching files during a slow load aborts immediately. Anything whose largest dimension exceeds roughly twice the screen size is decoded with integer subsampling (floor 2048 px), which keeps huge photos cheap to preview while leaving normal images at full resolution. The fit-to-panel scale is computed as `min(panelW/imgW, panelH/imgH)` capped at 1.0 to avoid upscaling. The user zoom multiplier (1×–16×) is applied on top; when zoomed the cursor switches to a move cursor to indicate panning is available. Rotation re-renders the bitmap in place and does not touch the file on disk.
 
 ## 🗂️ Source layout
 
