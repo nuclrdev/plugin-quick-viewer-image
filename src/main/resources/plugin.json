@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "version": "${project.version}",
+  "platformSdkVersion": "4.0.0",
+	"plugins": [
+		{
+			"class": "dev.nuclr.plugin.core.quick.viewer.ImageQuickViewProvider",
+			"type": "QuickView",
+			"id": "dev.nuclr.plugin.core.quick.viewer.image",
+			"name": "Image Quick Viewer",
+			"version": "${project.version}",
+			"description": "A quick viewer plugin for displaying images.",
+			"author": "Nuclr Team",
+			"license": "Apache-2.0",
+			"website": "https://nuclr.dev",
+			"pageUrl": "https://nuclr.dev/plugins/core/image-quick-viewer.html",
+			"docUrl": "https://nuclr.dev/plugins/core/image-quick-viewer.html",
+			"developer": "Official",
+			"singleton": true,
+			"priority": 1
+		}
+	]
+}

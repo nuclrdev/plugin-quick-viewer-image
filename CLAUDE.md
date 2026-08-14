@@ -18,7 +18,7 @@ mvn clean package
 deploy.bat
 ```
 
-The build produces `target/quick-view-image-1.0.0.zip` — a plugin archive containing the plugin JAR, dependencies in `lib/`, `plugin.json`, LICENSE, and README.
+The build produces `target/quick-view-image-1.0.0.zip` — a plugin archive containing the plugin JAR, dependencies in `lib/`, LICENSE, and README.
 
 JAR signing runs during the `verify` phase and requires the keystore password via `-Djarsigner.storepass=<password>`.
 
@@ -26,7 +26,7 @@ JAR signing runs during the `verify` phase and requires the keystore password vi
 
 **Two source files, single responsibility each:**
 
-- **`ImageQuickViewerCorePlugin`** — Plugin entry point implementing `QuickViewPlugin`. Lazy-initializes the panel and delegates all work to `ImageViewPanel`. The `pluginClass` in `plugin.json` points here.
+- **`ImageQuickViewerCorePlugin`** — Plugin entry point implementing `QuickViewPlugin`. Lazy-initializes the panel and delegates all work to `ImageViewPanel`. Nuclr discovers it by scanning the plugin JAR.
 
 - **`ImageViewPanel`** — Swing `JPanel` subclass that handles image loading (`ImageIO.read`) and rendering. Contains the supported format list (`IMAGE_EXTENSIONS`), scaling logic (fit-contain, no upscaling), and quality rendering hints. Uses Lombok `@Data` and `@Slf4j`.
 

@@ -1,9 +1,7 @@
 package dev.nuclr.plugin.core.quick.viewer;
 
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Locale;
-import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.swing.JComponent;
@@ -19,7 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ImageQuickViewProvider implements QuickViewNuclrPlugin {
 
-	private static final String VERSION = loadVersion();
+	private static final String PLUGIN_ID = "dev.nuclr.plugin.core.quick.viewer.image";
 	private static final String THEME_UPDATED_EVENT_TYPE = "dev.nuclr.platform.theme.updated";
 
 	private NuclrPluginContext context;
@@ -87,10 +85,6 @@ public class ImageQuickViewProvider implements QuickViewNuclrPlugin {
 	}
 
 
-	@Override
-	public int priority() {
-		return 1;
-	}
 
 	@Override
 	public boolean openResource(NuclrResource resource, AtomicBoolean cancelled) {
@@ -112,63 +106,6 @@ public class ImageQuickViewProvider implements QuickViewNuclrPlugin {
 		if (panel != null) {
 			panel.clear();
 		}
-	}
-
-	@Override
-	public String id() {
-		return "dev.nuclr.plugin.core.quick.viewer.image";
-	}
-
-	@Override
-	public String name() {
-		return "Image Quick Viewer";
-	}
-
-	@Override
-	public String version() {
-		return VERSION;
-	}
-
-	private static String loadVersion() {
-		var props = new Properties();
-		try (var stream = ImageQuickViewProvider.class.getResourceAsStream("/plugin.properties")) {
-			if (stream != null) {
-				props.load(stream);
-			}
-		} catch (IOException e) {
-			log.warn("Could not load plugin.properties", e);
-		}
-		return props.getProperty("version", "unknown");
-	}
-
-	@Override
-	public String description() {
-		return "A quick viewer plugin for displaying images.";
-	}
-
-	@Override
-	public String author() {
-		return "Nuclr Team";
-	}
-
-	@Override
-	public String license() {
-		return "Apache-2.0";
-	}
-
-	@Override
-	public String website() {
-		return "https://nuclr.dev";
-	}
-
-	@Override
-	public String pageUrl() {
-		return "https://nuclr.dev/plugins/core/image-quick-viewer.html";
-	}
-
-	@Override
-	public String docUrl() {
-		return "https://nuclr.dev/plugins/core/image-quick-viewer.html";
 	}
 
 	@Override
@@ -200,13 +137,9 @@ public class ImageQuickViewProvider implements QuickViewNuclrPlugin {
 
 	@Override
 	public String uuid() {
-		return id();
+		return PLUGIN_ID;
 	}
 
-	@Override
-	public Developer developer() {
-		return Developer.Official;
-	}
 
 	@Override
 	public NuclrPluginContext getContext() {
