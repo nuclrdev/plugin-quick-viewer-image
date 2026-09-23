@@ -53,6 +53,12 @@ Tick the **ⓘ Info** checkbox in the bottom-left corner (or right-click → **S
 
 > 🔧 For broader format support (WebP, SVG, RAW, TIFF, and more), use the **ImageMagick Bridge** plugin alongside this one.
 
+## 🖼️ Thumbnail
+
+The image, shrunk while it is decoded: the decoder subsamples to about twice the requested box before a final quality downscale, so a large photo is never decoded at full size. Resources without a local file are read as a stream.
+
+It implements the platform SDK 6.0.0 thumbnail methods, so plugins that want a picture of a file - attachment chips in AI Projects, for one - get it through Commander.
+
 ## 📥 Installation
 
 Copy the signed plugin archive and detached signature into the Nuclr Commander `plugins/` directory:
@@ -84,7 +90,7 @@ Most dependencies are provided by Nuclr Commander at runtime; the metadata libra
 
 | Library | Version | Purpose |
 |---|---|---|
-| `dev.nuclr:platform-sdk` | `3.0.2` | Nuclr platform interfaces |
+| `dev.nuclr:platform-sdk` | `6.0.0` | Nuclr platform interfaces |
 | `com.drewnoakes:metadata-extractor` | `2.20.0` | EXIF / image metadata extraction (bundled) |
 
 ## 📜 License

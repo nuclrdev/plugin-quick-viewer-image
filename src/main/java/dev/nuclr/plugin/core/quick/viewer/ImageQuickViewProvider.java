@@ -1,9 +1,16 @@
 package dev.nuclr.plugin.core.quick.viewer;
 
+import java.awt.image.BufferedImage;
+import java.io.BufferedInputStream;
 import java.nio.file.Path;
+import java.util.Iterator;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import javax.imageio.ImageIO;
+import javax.imageio.ImageReadParam;
+import javax.imageio.ImageReader;
+import javax.imageio.stream.ImageInputStream;
 import javax.swing.JComponent;
 
 import org.apache.commons.io.FilenameUtils;
@@ -95,6 +102,50 @@ public class ImageQuickViewProvider implements QuickViewNuclrPlugin {
 		currentCancelled = cancelled;
 		panel();
 		return panel.load(resource, cancelled);
+	}
+
+	@Override
+	public boolean supportsThumbnails() {
+		return true;
+	}
+
+	@Override
+	public BufferedImage thumbnail(NuclrResource resource, int maxWidth, int maxHeight, AtomicBoolean cancelled) {
+		if (resource == null || maxWidth <= 0 || maxHeight <= 0 || !supports(resource)) {
+			return null;
+		}
+		try (var raw = resource.openInputStream();
+				ImageInputStream iis = ImageIO.createImageInputStream(
+						new BufferedInputStream(new CancelableInputStream(raw, cancelled), 1 << 16))) {
+			if (iis == null) {
+				return null;
+			}
+			Iterator<ImageReader> readers = ImageIO.getImageReaders(iis);
+			if (!readers.hasNext()) {
+				return null;
+			}
+			ImageReader reader = readers.next();
+			try {
+				reader.setInput(iis, true, true);
+				int index = reader.getMinIndex();
+				// Subsample while decoding, but keep at least twice the box so the
+				// final downscale still has pixels to average.
+				int step = Math.min(reader.getWidth(index) / (maxWidth * 2), reader.getHeight(index) / (maxHeight * 2));
+				ImageReadParam param = reader.getDefaultReadParam();
+				if (step > 1) {
+					param.setSourceSubsampling(step, step, 0, 0);
+				}
+				if (cancelled != null && cancelled.get()) {
+					return null;
+				}
+				return ThumbnailScaler.fit(reader.read(index, param), maxWidth, maxHeight);
+			} finally {
+				reader.dispose();
+			}
+		} catch (Exception e) {
+			log.debug("No thumbnail for {}: {}", resource.getName(), e.toString());
+			return null;
+		}
 	}
 
 	@Override
