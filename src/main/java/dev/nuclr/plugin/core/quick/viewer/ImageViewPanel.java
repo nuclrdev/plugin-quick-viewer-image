@@ -1,5 +1,7 @@
 package dev.nuclr.plugin.core.quick.viewer;
 
+import static dev.nuclr.plugin.core.quick.viewer.Messages.tr;
+
 import java.awt.Desktop;
 import java.awt.Toolkit;
 import java.awt.datatransfer.Clipboard;
@@ -108,8 +110,8 @@ public class ImageViewPanel extends JPanel {
 	private Point lastDragPoint;
 	private final JPopupMenu contextMenu = new JPopupMenu();
 
-	private final RotateAction rotateLeftAction = new RotateAction("Rotate left (L)", false);
-	private final RotateAction rotateRightAction = new RotateAction("Rotate right (R)", true);
+	private final RotateAction rotateLeftAction = new RotateAction(tr("menu.rotate.left"), false);
+	private final RotateAction rotateRightAction = new RotateAction(tr("menu.rotate.right"), true);
 	private final JMenuItem rotateLeftItem = new JMenuItem(rotateLeftAction);
 	private final JMenuItem rotateRightItem = new JMenuItem(rotateRightAction);
 	private final JMenuItem copyImageItem = new JMenuItem(new CopyImageAction());
@@ -118,8 +120,8 @@ public class ImageViewPanel extends JPanel {
 	private final JMenuItem copyPathItem = new JMenuItem(new CopyPathAction());
 
 	/** Visible toggle (bottom-left) plus a mirroring context-menu item for showing the info overlay. */
-	private final JCheckBox infoCheckBox = new JCheckBox("ⓘ Info");
-	private final JCheckBoxMenuItem infoMenuItem = new JCheckBoxMenuItem("Show image info");
+	private final JCheckBox infoCheckBox = new JCheckBox(tr("info.toggle"));
+	private final JCheckBoxMenuItem infoMenuItem = new JCheckBoxMenuItem(tr("menu.show.info"));
 
 	/** Whether the semi-transparent metadata overlay is currently drawn on top of the image. */
 	private boolean showInfo = false;
@@ -233,14 +235,14 @@ public class ImageViewPanel extends JPanel {
 				return false;
 			}
 			log.error("Failed to read image: {}", item.getName(), e);
-			showMessage("Image preview unavailable", e.getMessage() != null ? e.getMessage() : "Failed to load image data.");
+			showMessage(tr("error.unavailable.title"), e.getMessage() != null ? e.getMessage() : tr("error.unavailable.detail"));
 			return false;
 		}
 
 		try {
 			if (cancelled != null && cancelled.get()) return false;
 			if (img == null) {
-				showMessage("Invalid image", "The selected file could not be decoded as an image.");
+				showMessage(tr("error.invalid.title"), tr("error.invalid.detail"));
 				return false;
 			}
 			this.currentResource = item;
@@ -258,7 +260,7 @@ public class ImageViewPanel extends JPanel {
 			repaint();
 			return true;
 		} catch (Exception e) {
-			showMessage("Image preview unavailable", e.getMessage() != null ? e.getMessage() : "Failed to load image data.");
+			showMessage(tr("error.unavailable.title"), e.getMessage() != null ? e.getMessage() : tr("error.unavailable.detail"));
 			return false;
 		}
 	}
@@ -932,7 +934,7 @@ public class ImageViewPanel extends JPanel {
 		private static final long serialVersionUID = 1L;
 
 		private CopyImageAction() {
-			super("Copy image");
+			super(tr("menu.copy.image"));
 		}
 
 		@Override
@@ -948,7 +950,7 @@ public class ImageViewPanel extends JPanel {
 		private static final long serialVersionUID = 1L;
 
 		private OpenInExplorerAction() {
-			super("Open in Explorer");
+			super(tr("menu.open.in.explorer"));
 		}
 
 		@Override
@@ -972,7 +974,7 @@ public class ImageViewPanel extends JPanel {
 		private static final long serialVersionUID = 1L;
 
 		private CopyFileAction() {
-			super("Copy file");
+			super(tr("menu.copy.file"));
 		}
 
 		@Override
@@ -989,7 +991,7 @@ public class ImageViewPanel extends JPanel {
 		private static final long serialVersionUID = 1L;
 
 		private CopyPathAction() {
-			super("Copy path");
+			super(tr("menu.copy.path"));
 		}
 
 		@Override

@@ -1,5 +1,7 @@
 package dev.nuclr.plugin.core.quick.viewer;
 
+import static dev.nuclr.plugin.core.quick.viewer.Messages.tr;
+
 import java.awt.image.BufferedImage;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -47,10 +49,10 @@ final class ImageInfo {
 
 		String name = resource != null ? resource.getName() : null;
 		if (name != null && !name.isBlank()) {
-			info.put("File", name);
+			info.put(tr("info.file"), name);
 			String ext = extension(name);
 			if (ext != null) {
-				info.put("Type", ext.toUpperCase(Locale.ROOT));
+				info.put(tr("info.type"), ext.toUpperCase(Locale.ROOT));
 			}
 		}
 
@@ -74,7 +76,7 @@ final class ImageInfo {
 		Path path = resource.getPath();
 		try {
 			if (path != null && Files.isReadable(path)) {
-				info.put("Size", humanReadableSize(Files.size(path)));
+				info.put(tr("info.size"), humanReadableSize(Files.size(path)));
 				return ImageMetadataReader.readMetadata(path.toFile());
 			}
 			try (InputStream in = resource.openInputStream()) {
@@ -95,7 +97,7 @@ final class ImageInfo {
 			h = decoded.getHeight();
 		}
 		if (w != null && h != null) {
-			info.put("Dimensions", w + " × " + h + " px");
+			info.put(tr("info.dimensions"), tr("info.dimensions.value", String.valueOf(w), String.valueOf(h)));
 		}
 	}
 
@@ -110,18 +112,18 @@ final class ImageInfo {
 		String camera = join(
 				description(ifd0, ExifIFD0Directory.TAG_MAKE),
 				description(ifd0, ExifIFD0Directory.TAG_MODEL));
-		putIfPresent(info, "Camera", camera);
-		putIfPresent(info, "Lens", description(sub, ExifSubIFDDirectory.TAG_LENS_MODEL));
-		putIfPresent(info, "Taken", description(sub, ExifSubIFDDirectory.TAG_DATETIME_ORIGINAL));
-		putIfPresent(info, "Exposure", description(sub, ExifSubIFDDirectory.TAG_EXPOSURE_TIME));
-		putIfPresent(info, "Aperture", description(sub, ExifSubIFDDirectory.TAG_FNUMBER));
-		putIfPresent(info, "ISO", description(sub, ExifSubIFDDirectory.TAG_ISO_EQUIVALENT));
-		putIfPresent(info, "Focal length", description(sub, ExifSubIFDDirectory.TAG_FOCAL_LENGTH));
-		putIfPresent(info, "Orientation", description(ifd0, ExifIFD0Directory.TAG_ORIENTATION));
-		putIfPresent(info, "Software", description(ifd0, ExifIFD0Directory.TAG_SOFTWARE));
+		putIfPresent(info, tr("info.camera"), camera);
+		putIfPresent(info, tr("info.lens"), description(sub, ExifSubIFDDirectory.TAG_LENS_MODEL));
+		putIfPresent(info, tr("info.taken"), description(sub, ExifSubIFDDirectory.TAG_DATETIME_ORIGINAL));
+		putIfPresent(info, tr("info.exposure"), description(sub, ExifSubIFDDirectory.TAG_EXPOSURE_TIME));
+		putIfPresent(info, tr("info.aperture"), description(sub, ExifSubIFDDirectory.TAG_FNUMBER));
+		putIfPresent(info, tr("info.iso"), description(sub, ExifSubIFDDirectory.TAG_ISO_EQUIVALENT));
+		putIfPresent(info, tr("info.focal.length"), description(sub, ExifSubIFDDirectory.TAG_FOCAL_LENGTH));
+		putIfPresent(info, tr("info.orientation"), description(ifd0, ExifIFD0Directory.TAG_ORIENTATION));
+		putIfPresent(info, tr("info.software"), description(ifd0, ExifIFD0Directory.TAG_SOFTWARE));
 
 		if (gps != null && gps.getGeoLocation() != null) {
-			putIfPresent(info, "GPS", gps.getGeoLocation().toDMSString());
+			putIfPresent(info, tr("info.gps"), gps.getGeoLocation().toDMSString());
 		}
 	}
 
@@ -206,9 +208,9 @@ final class ImageInfo {
 
 	private static String humanReadableSize(long bytes) {
 		if (bytes < 1024) {
-			return bytes + " B";
+			return tr("info.size.bytes", String.valueOf(bytes));
 		}
-		String[] units = { "KB", "MB", "GB", "TB" };
+		String[] units = { tr("info.size.kb"), tr("info.size.mb"), tr("info.size.gb"), tr("info.size.tb") };
 		double size = bytes;
 		int unit = -1;
 		do {

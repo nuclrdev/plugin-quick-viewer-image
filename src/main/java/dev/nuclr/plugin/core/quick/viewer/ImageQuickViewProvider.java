@@ -44,6 +44,9 @@ public class ImageQuickViewProvider implements QuickViewNuclrPlugin {
 
 	@Override
 	public void preinit(NuclrPluginContext context) {
+		if (context != null) {
+			Messages.use(context.getLocale());
+		}
 		this.context = context;
 		this.themeScheme = context != null ? context.getTheme() : null;
 	}
